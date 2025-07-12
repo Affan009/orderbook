@@ -39,7 +39,7 @@ bool Orderbook::CanFullyFill(Side side, Price price, Quantity quantity) const {
     }
 
     for (const auto& [levelPrice, levelData] : data_) {
-        if (threshold.has_value() && (side == Side::Buy && threshold.value() > levelPrice) || (side == Side::Sell && threshold.value() < levelPrice))
+        if (threshold.has_value() && ((side == Side::Buy && threshold.value() > levelPrice) || (side == Side::Sell && threshold.value() < levelPrice)))
             continue;
 
         if ((side == Side::Buy && levelPrice > price) || (side == Side::Sell && levelPrice < price))
@@ -153,7 +153,7 @@ void Orderbook::PruneGoodForDayOrders() {
             std::scoped_lock ordersLock{ ordersMutex_ };
             
             for (const auto& [_, entry] : orders_) {
-                const auto& [order, _] = entry;
+                const auto& [order, status] = entry;
                 if (order->GetOrderType() != OrderType::GoodForDay)
                     continue;
 
