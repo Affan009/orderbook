@@ -1,5 +1,3 @@
-# orderbook
-
 # 🧾 Order Book Matching Engine (C++)
 
 This is a high-performance **limit order book** matching engine implemented in modern **C++20**. It supports market, limit, fill-or-kill, and good-for-day orders with multithreaded pruning logic and price-time priority matching.
@@ -18,6 +16,10 @@ This is a high-performance **limit order book** matching engine implemented in m
 -  **Background Thread** for pruning GFD orders after market hours
 -  **Thread-safe access** using `std::mutex` and `std::scoped_lock`
 -  Level-wise market data retrieval via `GetOrderInfos()`
+
+Credits
+
+- This project was made thanks to the tutorial series by [Coding Jesus](https://www.youtube.com/c/CodingJesus).
 
 ---
 
