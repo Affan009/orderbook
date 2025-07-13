@@ -1,4 +1,4 @@
-# 🧾 Order Book Matching Engine (C++)
+# Order Book Matching Engine (C++)
 
 This is a high-performance **limit order book** matching engine implemented in modern **C++20**. It supports market, limit, fill-or-kill, and good-for-day orders with multithreaded pruning logic and price-time priority matching.
 
