@@ -13,7 +13,7 @@ if(ORDERBOOK_SANITIZE)
     add_link_options(-fsanitize=address,undefined)
 endif()
 
-add_library(orderbook_core src/core/price.cpp)
+add_library(orderbook_core src/core/types.cpp)
 add_library(orderbook::core ALIAS orderbook_core)
 
 target_include_directories(orderbook_core PUBLIC include)
@@ -23,7 +23,7 @@ target_compile_options(orderbook_core PRIVATE -Wall -Wextra -Wpedantic)
 find_package(GTest REQUIRED)
 enable_testing()
 
-add_executable(orderbook_core_tests tests/core/price_test.cpp)
+add_executable(orderbook_core_tests tests/core/types_test.cpp)
 target_link_libraries(orderbook_core_tests PRIVATE orderbook::core GTest::gtest_main)
 target_compile_options(orderbook_core_tests PRIVATE -Wall -Wextra -Wpedantic)
 
