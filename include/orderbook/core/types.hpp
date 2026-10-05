@@ -32,4 +32,6 @@ private:
     std::int64_t value_;
 };
 
+enum class Side { Buy, Sell }; 
+
 } // namespace orderbook::core

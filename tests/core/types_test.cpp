@@ -1,7 +1,11 @@
 #include <gtest/gtest.h>
+#include <type_traits>
 #include "orderbook/core/types.hpp"
 
 using namespace orderbook::core;
+
+static_assert(!std::is_convertible_v<int, Side>, "an int must not silently become a Light");
+static_assert(!std::is_convertible_v<Side, int>, "a Side must not silently become an int");
 
 TEST(Price, StoresTicksExactly) {
     Price testPrice{12345};
@@ -49,4 +53,7 @@ TEST(OrderId, EqualIdsAreEqual) {
     OrderId testId1{1};
     OrderId testId2{1};
     EXPECT_EQ(testId1, testId2);
+}
+TEST(Side, SidesAreDistinct) {
+    EXPECT_NE(Side::Buy, Side::Sell);
 }
