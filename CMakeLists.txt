@@ -23,7 +23,10 @@ target_compile_options(orderbook_core PRIVATE -Wall -Wextra -Wpedantic)
 find_package(GTest REQUIRED)
 enable_testing()
 
-add_executable(orderbook_core_tests tests/core/types_test.cpp)
+add_executable(orderbook_core_tests
+    tests/core/types_test.cpp
+    tests/core/instrument_test.cpp
+)
 target_link_libraries(orderbook_core_tests PRIVATE orderbook::core GTest::gtest_main)
 target_compile_options(orderbook_core_tests PRIVATE -Wall -Wextra -Wpedantic)
 

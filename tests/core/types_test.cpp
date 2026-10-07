@@ -1,6 +1,7 @@
 #include <chrono>
-#include <gtest/gtest.h>
 #include <type_traits>
+#include <gtest/gtest.h>
+
 #include "orderbook/core/types.hpp"
 
 using namespace std::chrono;
