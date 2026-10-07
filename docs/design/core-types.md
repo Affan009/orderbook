@@ -9,8 +9,8 @@
 | Piece | Example | Underlying Type | Significance |
 |---|---|---|---|
 | Side | buy | A scoped enum | Side the order rests in and what it can trade with |
-| Price | $187.43 | `int64_t` value (multiple of the tick size) | Quoted price for matching and priority determination |
-| Quantity | 100 shares | `int64_t` value (multiple of the lot size)| Amount to be filled |
+| Price | $187.43 | `int64_t` value (count of the ticks) | Quoted price for matching and priority determination |
+| Quantity | 100 shares | `int64_t` value (count of the lot steps)| Amount to be filled |
 | Order ID | 42 | `int64_t` value | An identifier for cancelling or modifying orders |
 | Arrival time/Timestamp | 09:30:00.000123 | A type from `<chrono>` | A timestamp used for priority determination on same price |
 
@@ -49,4 +49,33 @@ using Price = StrongType<struct PriceTag>;
 * `std::chrono` is used because it already separates between time points and durations as strong types.
 * A moment - moment gives a duration, a moment + duration gives a moment, but a moment + moment is meaningless.
 * It is measured in nanoseconds so that timestamps are finer and price-time priority can work effectively with less collisions.
-* NOTE: The timestamp will be provided to the orderbook (by the exchange or from outside, not by the trader ever!), so that it doesn't read the system clock and it is easier to replay events (which makes the test deterministic, important for random testing later).
+* **NOTE**: The timestamp will be provided to the orderbook (by the exchange or from outside, not by the trader ever!), so that it doesn't read the system clock and it is easier to replay events (which makes the test deterministic, important for random testing later).
+
+## Instrument
+
+* An Instrument holds the symbol, tick size and lot size of an instrument/asset.
+* Tick and lot sizes are stored as whole numbers of billionths (`FIXED_POINT_SCALE = 1'000'000'000`)
+*  Tick and lot sizes must be strictly positive. Instruments come with configuration, so a bad value throws (checked in each build).
+*  **NOTES**: 
+1. The decision for storage of tick and lot sizes was modelled from CME's binary price format (`PRICENULL9`: an `int64_t` mantissa with a fixed `-9` exponent).
+2. `Qty` counts steps, not billionths, so with 1-share lot, 100 shares is `Qty{ 100 }` and with 0.001 BTC step, 0.005 is `Qty{ 5 }`.
+3. Instrument is not used by the book, the book only works on ticks and lots. It is used when loading and/or displaying data.
+
+## References
+
+- Gould, M. D., Porter, M. A., Williams, S., McDonald, M., Fenn, D. J., & Howison, S. D. (2013).
+  *Limit order books*. Quantitative Finance, 13(11). https://arxiv.org/abs/1012.0349
+  — "resolution parameters" (tick size and lot size), section III.G.
+- Boccara, J. (2016). *Strong types for strong interfaces*. Fluent C++.
+  https://www.fluentcpp.com/2016/12/08/strong-types-for-strong-interfaces/
+  — the tagged wrapper pattern behind `StrongType`.
+- cppreference: `std::chrono::time_point` and `std::chrono::duration`.
+  https://en.cppreference.com/w/cpp/chrono/time_point ·
+  https://en.cppreference.com/w/cpp/chrono/duration
+  — moment and length-of-time types used for `Timestamp`.
+- CME Group. *MDP 3.0 – CME Globex Pricing*.
+  https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457225869/MDP+3.0+-+CME+Globex+Pricing
+  — tick size as the minimum price fluctuation (tag 969, MinPriceIncrement).
+- CME Group. *MDP 3.0 – SBE Decoding Example*.
+  https://cmegroupclientsite.atlassian.net/wiki/display/EPICSANDBOX/MDP+3.0+-+SBE+Decoding+Example
+  — PRICE9 / PRICENULL9: an int64 mantissa with a constant exponent of -9.
