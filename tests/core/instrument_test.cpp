@@ -6,10 +6,10 @@
 using namespace orderbook::core;
 
 TEST(Instrument, StoresItsFields) {
-    const Instrument test_instrument{"AAPL", TickSize{fixed_point_scale / 100}, LotSize{fixed_point_scale}};
-    EXPECT_EQ(test_instrument.symbol(), "AAPL");
-    EXPECT_EQ(test_instrument.tick_size(), TickSize{fixed_point_scale / 100});
-    EXPECT_EQ(test_instrument.lot_size(), LotSize{fixed_point_scale});
+    const Instrument apple{"AAPL", TickSize{fixed_point_scale / 100}, LotSize{fixed_point_scale}};
+    EXPECT_EQ(apple.symbol(), "AAPL");
+    EXPECT_EQ(apple.tick_size(), TickSize{fixed_point_scale / 100});
+    EXPECT_EQ(apple.lot_size(), LotSize{fixed_point_scale});
 }
 
 TEST(Instrument, ThrowsOnZeroTickSize) {
