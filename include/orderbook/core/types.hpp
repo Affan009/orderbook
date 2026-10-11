@@ -41,9 +41,15 @@ public:
     constexpr std::int64_t value() const { return value_; }
     constexpr auto operator<=>(const Qty&) const = default;
 
+    constexpr Qty& operator+=(Qty other) { *this = Qty{ value_ + other.value_ }; return *this; }
+    constexpr Qty& operator-=(Qty other) { *this = Qty{ value_ - other.value_ }; return *this; }
+
 private:
     std::int64_t value_;
 };
+
+constexpr Qty operator+(Qty a, Qty b) { a += b; return a; }
+constexpr Qty operator-(Qty a, Qty b) { a -= b; return a; }
 
 // Side clarifies the side of the order and what it can be matched to.
 enum class Side { Buy, Sell };
