@@ -2,11 +2,11 @@
 
 #include <cstdint>
 #include <functional>
-#include <list>
 #include <map>
 #include <optional>
 #include <unordered_map>
 
+#include "orderbook/book/level.hpp"
 #include "orderbook/book/order.hpp"
 #include "orderbook/core/types.hpp"
 
@@ -27,10 +27,9 @@ public:
     );
     std::optional<core::Price> best_bid() const;
     std::optional<core::Price> best_ask() const;
+    core::Qty depth_at(core::Side side, core::Price price) const;
 
 private:
-    using Level = std::list<Order>;
-
     std::map<core::Price, Level, std::greater<>> bids_;
     std::map<core::Price, Level> asks_;
     std::unordered_map<core::OrderId, Level::iterator> orders_by_id_;

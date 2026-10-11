@@ -25,7 +25,7 @@ public:
         depth_ += order.qty;
         return queue_.insert(queue_.end(), order);
     }
-    
+
     core::Qty depth() const { return depth_; }
     bool empty() const { return queue_.empty(); }
 

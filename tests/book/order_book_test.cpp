@@ -76,3 +76,34 @@ TEST(OrderBook, RejectsZeroQuantity) {
     // The best bid must not have a value.
     EXPECT_FALSE(book.best_bid().has_value());
 }
+
+TEST(OrderBook, DepthIsTotalAtPriceLevel) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{12345}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{3}, Side::Buy, Price{12345}, Qty{200}, Timestamp{2ns}),
+              AddResult::Accepted);
+    EXPECT_EQ(book.depth_at(Side::Buy, Price{12345}), Qty{300});
+}
+
+TEST(OrderBook, DepthIsZeroWhereNoOrdersRest) {
+    const OrderBook book;
+    EXPECT_EQ(book.depth_at(Side::Buy, Price{12345}), Qty{0});
+}
+
+TEST(OrderBook, DepthOfOtherSideIsZero) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{12345}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+    EXPECT_EQ(book.depth_at(Side::Sell, Price{12345}), Qty{0});
+}
+
+TEST(OrderBook, RejectedDuplicateLeavesDepthUnchanged) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{12345}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+    const AddResult result =
+        book.add_order(OrderId{1}, Side::Buy, Price{12345}, Qty{50}, Timestamp{2ns});
+    EXPECT_EQ(result, AddResult::DuplicateOrderId);
+    EXPECT_EQ(book.depth_at(Side::Buy, Price{12345}), Qty{100});
+}
