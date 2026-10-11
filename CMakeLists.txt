@@ -20,10 +20,11 @@ add_library(orderbook::core ALIAS orderbook_core)
 target_include_directories(orderbook_core PUBLIC include)
 target_compile_options(orderbook_core PRIVATE -Wall -Wextra -Wpedantic)
 
-add_library(orderbook_book INTERFACE)
+add_library(orderbook_book src/book/order_book.cpp)
 add_library(orderbook::book ALIAS orderbook_book)
-target_include_directories(orderbook_book INTERFACE include)
-target_link_libraries(orderbook_book INTERFACE orderbook::core)
+target_include_directories(orderbook_book PUBLIC include)
+target_link_libraries(orderbook_book PUBLIC orderbook::core)
+target_compile_options(orderbook_book PRIVATE -Wall -Wextra -Wpedantic)
 
 # ---- Tests ----
 
@@ -37,7 +38,10 @@ add_executable(orderbook_core_tests
 target_link_libraries(orderbook_core_tests PRIVATE orderbook::core GTest::gtest_main)
 target_compile_options(orderbook_core_tests PRIVATE -Wall -Wextra -Wpedantic)
 
-add_executable(orderbook_book_tests tests/book/order_test.cpp)
+add_executable(orderbook_book_tests
+    tests/book/order_test.cpp
+    tests/book/order_book_test.cpp
+)
 target_link_libraries(orderbook_book_tests PRIVATE orderbook::book GTest::gtest_main)
 target_compile_options(orderbook_book_tests PRIVATE -Wall -Wextra -Wpedantic)
 

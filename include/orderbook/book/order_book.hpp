@@ -18,8 +18,12 @@ enum class AddResult : std::uint8_t { Accepted, DuplicateOrderId, ZeroQuantity }
 // Orderbook structure that collects and sorts bids and asks according to price level.
 class OrderBook {
 public:
-    AddResult add_order(
-        core::OrderId id, core::Side side, core::Price price, core::Qty qty, core::Timestamp arrival_time
+    [[nodiscard]] AddResult add_order(
+        core::OrderId id,
+        core::Side side,
+        core::Price price,
+        core::Qty qty,
+        core::Timestamp arrival_time
     );
     std::optional<core::Price> best_bid() const;
     std::optional<core::Price> best_ask() const;
