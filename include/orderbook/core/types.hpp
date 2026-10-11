@@ -4,6 +4,7 @@
 #include <chrono>
 #include <compare>
 #include <cstdint>
+#include <functional>
 
 namespace orderbook::core {
 
@@ -65,3 +66,12 @@ using TickSize = StrongType<struct TickSizeTag>;
 using LotSize = StrongType<struct LotSizeTag>;
 
 } // namespace orderbook::core
+
+// Specialization of std::hash to allow hashing of a StrongType using the hash of the number inside it.
+// (std::unordered_map<> requires this)
+template <typename Tag>
+struct std::hash<orderbook::core::StrongType<Tag>> {
+    std::size_t operator()(const orderbook::core::StrongType<Tag>& x) const noexcept {
+        return std::hash<std::int64_t>{}(x.value());
+    }
+};
