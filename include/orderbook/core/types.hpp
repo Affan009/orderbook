@@ -54,14 +54,14 @@ using Timestamp = std::chrono::sys_time<std::chrono::nanoseconds>;
 // How many stored units make one whole unit.
 // It is used only when converting to or from real-world values (loading or displaying data).
 // (The book never uses it, it only works in ticks and steps).
-inline constexpr std::int64_t FIXED_POINT_SCALE = 1'000'000'000;
+inline constexpr std::int64_t fixed_point_scale = 1'000'000'000;
 
 // TickSize is the size of one price step, counted in billionths of a currency unit.
-// Ex: 0.01 currency unit = FIXED_POINT_SCALE / 100.
+// Ex: 0.01 currency unit = fixed_point_scale / 100.
 using TickSize = StrongType<struct TickSizeTag>;
 
 // LotSize is the size of smallest tradable quantity, counted in billionths of a unit.
-// Ex: 1 share = FIXED_POINT_SCALE, or 0.001 BTC step = FIXED_POINT_SCALE / 1000.
+// Ex: 1 share = fixed_point_scale, or 0.001 BTC step = fixed_point_scale / 1000.
 using LotSize = StrongType<struct LotSizeTag>;
 
 } // namespace orderbook::core

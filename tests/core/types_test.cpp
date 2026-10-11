@@ -29,36 +29,36 @@ static_assert(!std::is_convertible_v<Side, int>, "a Side must not silently becom
 static_assert(std::is_same_v<Timestamp::duration, std::chrono::nanoseconds>, "Duration must be in units of nanoseconds");
 
 TEST(Price, StoresTicksExactly) {
-    Price testPrice{12345};
-    EXPECT_EQ(testPrice.value(), 12345);
+    const Price test_price{12345};
+    EXPECT_EQ(test_price.value(), 12345);
 }
 
 TEST(Price, EqualTickCountsAreEqual) {
-    Price testPrice1{12345};
-    Price testPrice2{12345};
-    EXPECT_EQ(testPrice1, testPrice2);
+    const Price test_price_1{12345};
+    const Price test_price_2{12345};
+    EXPECT_EQ(test_price_1, test_price_2);
 }
 
 TEST(Price, FewerTicksIsLess) {
-    Price testPrice1{12344};
-    Price testPrice2{12345};
-    EXPECT_LT(testPrice1, testPrice2);
+    const Price test_price_1{12344};
+    const Price test_price_2{12345};
+    EXPECT_LT(test_price_1, test_price_2);
 }
 
 TEST(Qty, StoresLotsExactly) {
-    Qty testQuantity{123};
-    EXPECT_EQ(testQuantity.value(), 123);
+    const Qty test_quantity{123};
+    EXPECT_EQ(test_quantity.value(), 123);
 }
 
 TEST(Qty, ZeroQuantityAllowed) {
-    Qty testQuantity{0};
-    EXPECT_EQ(testQuantity.value(), 0);
+    const Qty test_quantity{0};
+    EXPECT_EQ(test_quantity.value(), 0);
 }
 
 TEST(Qty, MoreLotsIsLarger) {
-    Qty testQuantity1{123};
-    Qty testQuantity2{122};
-    EXPECT_GT(testQuantity1, testQuantity2);
+    const Qty test_quantity_1{123};
+    const Qty test_quantity_2{122};
+    EXPECT_GT(test_quantity_1, test_quantity_2);
 }
 
 TEST(Qty, NegativeQuantityDies) {
@@ -66,14 +66,14 @@ TEST(Qty, NegativeQuantityDies) {
 }
 
 TEST(OrderId, StoresIdExactly) {
-    OrderId testId{1};
-    EXPECT_EQ(testId.value(), 1);
+    const OrderId test_id{1};
+    EXPECT_EQ(test_id.value(), 1);
 }
 
 TEST(OrderId, EqualIdsAreEqual) {
-    OrderId testId1{1};
-    OrderId testId2{1};
-    EXPECT_EQ(testId1, testId2);
+    const OrderId test_id_1{1};
+    const OrderId test_id_2{1};
+    EXPECT_EQ(test_id_1, test_id_2);
 }
 
 TEST(Side, SidesAreDistinct) {
@@ -81,7 +81,7 @@ TEST(Side, SidesAreDistinct) {
 }
 
 TEST(Timestamp, LaterTimeIsGreater) {
-    Timestamp testTime1{nanoseconds{1}};
-    Timestamp testTime2 = testTime1 + nanoseconds{1};
-    EXPECT_LT(testTime1, testTime2);
+    const Timestamp test_time_1{nanoseconds{1}};
+    const Timestamp test_time_2 = test_time_1 + nanoseconds{1};
+    EXPECT_LT(test_time_1, test_time_2);
 }

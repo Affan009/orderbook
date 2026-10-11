@@ -54,7 +54,7 @@ using Price = StrongType<struct PriceTag>;
 ## Instrument
 
 * An Instrument holds the symbol, tick size and lot size of an instrument/asset.
-* Tick and lot sizes are stored as whole numbers of billionths (`FIXED_POINT_SCALE = 1'000'000'000`)
+* Tick and lot sizes are stored as whole numbers of billionths (`fixed_point_scale = 1'000'000'000`)
 *  Tick and lot sizes must be strictly positive. Instruments come with configuration, so a bad value throws (checked in each build).
 *  **NOTES**: 
 1. The decision for storage of tick and lot sizes was modelled from CME's binary price format (`PRICENULL9`: an `int64_t` mantissa with a fixed `-9` exponent).

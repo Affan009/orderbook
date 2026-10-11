@@ -13,12 +13,19 @@ if(ORDERBOOK_SANITIZE)
     add_link_options(-fsanitize=address,undefined)
 endif()
 
+# ---- Libraries ----
+
 add_library(orderbook_core src/core/types.cpp)
 add_library(orderbook::core ALIAS orderbook_core)
-
 target_include_directories(orderbook_core PUBLIC include)
-
 target_compile_options(orderbook_core PRIVATE -Wall -Wextra -Wpedantic)
+
+add_library(orderbook_book INTERFACE)
+add_library(orderbook::book ALIAS orderbook_book)
+target_include_directories(orderbook_book INTERFACE include)
+target_link_libraries(orderbook_book INTERFACE orderbook::core)
+
+# ---- Tests ----
 
 find_package(GTest REQUIRED)
 enable_testing()
@@ -30,5 +37,10 @@ add_executable(orderbook_core_tests
 target_link_libraries(orderbook_core_tests PRIVATE orderbook::core GTest::gtest_main)
 target_compile_options(orderbook_core_tests PRIVATE -Wall -Wextra -Wpedantic)
 
+add_executable(orderbook_book_tests tests/book/order_test.cpp)
+target_link_libraries(orderbook_book_tests PRIVATE orderbook::book GTest::gtest_main)
+target_compile_options(orderbook_book_tests PRIVATE -Wall -Wextra -Wpedantic)
+
 include(GoogleTest)
 gtest_discover_tests(orderbook_core_tests)
+gtest_discover_tests(orderbook_book_tests)
