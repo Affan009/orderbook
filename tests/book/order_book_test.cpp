@@ -1,4 +1,5 @@
 #include <chrono>
+#include <sstream>
 
 #include <gtest/gtest.h>
 
@@ -106,4 +107,66 @@ TEST(OrderBook, RejectedDuplicateLeavesDepthUnchanged) {
         book.add_order(OrderId{1}, Side::Buy, Price{12345}, Qty{50}, Timestamp{2ns});
     EXPECT_EQ(result, AddResult::DuplicateOrderId);
     EXPECT_EQ(book.depth_at(Side::Buy, Price{12345}), Qty{100});
+}
+
+TEST(OrderBook, PrintsNothingForEmptyBook) {
+    const OrderBook book;
+    std::ostringstream out;
+    book.print_book(out);
+    EXPECT_EQ(out.str(), "");
+}
+
+TEST(OrderBook, PrintsLadderWithBothSides) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{18742}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{2}, Side::Buy, Price{18742}, Qty{200}, Timestamp{2ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{3}, Side::Buy, Price{18740}, Qty{50}, Timestamp{3ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{4}, Side::Sell, Price{18745}, Qty{75}, Timestamp{4ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{5}, Side::Sell, Price{18750}, Qty{120}, Timestamp{5ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{6}, Side::Sell, Price{18750}, Qty{30}, Timestamp{6ns}),
+              AddResult::Accepted);
+
+    std::ostringstream out;
+    book.print_book(out);
+    EXPECT_EQ(out.str(),
+              "ASK 18750 qty=150 orders=2\n"
+              "ASK 18745 qty=75 orders=1\n"
+              "--- spread 3 ---\n"
+              "BID 18742 qty=300 orders=2\n"
+              "BID 18740 qty=50 orders=1\n");
+}
+
+TEST(OrderBook, PrintsOnlyBidsWhenNoAsks) {
+    OrderBook book;
+    // Worst price arrives first, so arrival order can't produce the expected output.
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{18740}, Qty{50}, Timestamp{1ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{2}, Side::Buy, Price{18742}, Qty{100}, Timestamp{2ns}),
+              AddResult::Accepted);
+
+    std::ostringstream out;
+    book.print_book(out);
+    EXPECT_EQ(out.str(),
+              "BID 18742 qty=100 orders=1\n"
+              "BID 18740 qty=50 orders=1\n");
+}
+
+TEST(OrderBook, PrintsOnlyAsksWhenNoBids) {
+    OrderBook book;
+    // Best price arrives first, so arrival order can't produce the expected output.
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Sell, Price{18745}, Qty{75}, Timestamp{1ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{2}, Side::Sell, Price{18750}, Qty{150}, Timestamp{2ns}),
+              AddResult::Accepted);
+
+    std::ostringstream out;
+    book.print_book(out);
+    EXPECT_EQ(out.str(),
+              "ASK 18750 qty=150 orders=1\n"
+              "ASK 18745 qty=75 orders=1\n");
 }

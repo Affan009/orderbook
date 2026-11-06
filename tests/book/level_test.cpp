@@ -24,6 +24,14 @@ TEST(Level, DepthIsTotalQuantity) {
     EXPECT_EQ(price_level.depth(), Qty{300});
 }
 
+TEST(Level, OrderCountIsNumberOfRestingOrders) {
+    Level price_level;
+    EXPECT_EQ(price_level.order_count(), 0U);
+    price_level.add(Order{OrderId{1}, Side::Buy, Price{12345}, Qty{100}, Timestamp{1ns}});
+    price_level.add(Order{OrderId{2}, Side::Buy, Price{12345}, Qty{200}, Timestamp{2ns}});
+    EXPECT_EQ(price_level.order_count(), 2U);
+}
+
 TEST(Level, AddReturnsIteratorToAddedOrder) {
     Level price_level;
     const auto order_it = price_level.add(

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <cstddef>
 #include <list>
 
 #include "orderbook/book/order.hpp"
@@ -27,6 +28,7 @@ public:
     }
 
     core::Qty depth() const { return depth_; }
+    std::size_t order_count() const { return queue_.size(); }
     bool empty() const { return queue_.empty(); }
 
 private:

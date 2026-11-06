@@ -1,4 +1,5 @@
 #include <optional>
+#include <ostream>
 
 #include "orderbook/book/order_book.hpp"
 
@@ -41,6 +42,24 @@ core::Qty OrderBook::depth_at(core::Side side, core::Price price) const {
     const auto it = asks_.find(price);
     if (it == asks_.end()) return core::Qty{0};
     return it->second.depth();
+}
+
+void OrderBook::print_book(std::ostream& out) const {
+    // Asks print highest first, so the best prices on both sides meet at the spread line.
+    for (auto it = asks_.rbegin(); it != asks_.rend(); ++it) {
+        out << "ASK " << it->first.value() << " qty=" << it->second.depth().value()
+            << " orders=" << it->second.order_count() << '\n';
+    }
+
+    if (!asks_.empty() && !bids_.empty()) {
+        out << "--- spread " << best_ask()->value() - best_bid()->value()
+            << " ---\n";
+    }
+
+    for (const auto& [price, level] : bids_) {
+        out << "BID " << price.value() << " qty=" << level.depth().value()
+            << " orders=" << level.order_count() << '\n';
+    }
 }
 
 } // namespace orderbook::book

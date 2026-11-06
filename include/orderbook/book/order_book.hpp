@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <iosfwd>
 #include <map>
 #include <optional>
 #include <unordered_map>
@@ -12,7 +13,7 @@
 
 namespace orderbook::book {
 
-// Tells the result of the order addition to the book
+// Tells the result of the order addition to the book.
 enum class AddResult : std::uint8_t { Accepted, DuplicateOrderId, ZeroQuantity };
 
 // Orderbook structure that collects and sorts bids and asks according to price level.
@@ -28,6 +29,7 @@ public:
     std::optional<core::Price> best_bid() const;
     std::optional<core::Price> best_ask() const;
     core::Qty depth_at(core::Side side, core::Price price) const;
+    void print_book(std::ostream& out) const;
 
 private:
     std::map<core::Price, Level, std::greater<>> bids_;
