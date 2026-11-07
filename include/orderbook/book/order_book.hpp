@@ -13,8 +13,9 @@
 
 namespace orderbook::book {
 
-// Tells the result of the order addition to the book.
+// Tells the result of an order addition/cancellation to the book.
 enum class AddResult : std::uint8_t { Accepted, DuplicateOrderId, ZeroQuantity };
+enum class CancelResult : std::uint8_t { Cancelled, UnknownOrderId };
 
 // Orderbook structure that collects and sorts bids and asks according to price level.
 class OrderBook {
@@ -26,6 +27,7 @@ public:
         core::Qty qty,
         core::Timestamp arrival_time
     );
+    [[nodiscard]] CancelResult cancel_order(core::OrderId id);
     std::optional<core::Price> best_bid() const;
     std::optional<core::Price> best_ask() const;
     core::Qty depth_at(core::Side side, core::Price price) const;

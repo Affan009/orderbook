@@ -23,6 +23,28 @@ AddResult OrderBook::add_order(
     return AddResult::Accepted;
 }
 
+CancelResult OrderBook::cancel_order(core::OrderId id) {
+    const auto map_it = orders_by_id_.find(id);
+    if (map_it == orders_by_id_.end()) return CancelResult::UnknownOrderId;
+
+    const auto order_it = map_it->second;
+
+    const core::Side side = order_it->side;
+    const core::Price price = order_it->price;
+
+    auto& price_level = (side == core::Side::Buy) ? bids_[price] : asks_[price];
+    price_level.remove(order_it);
+
+    if (price_level.empty()) {
+        if (side == core::Side::Buy) bids_.erase(price);
+        else asks_.erase(price);
+    }
+
+    orders_by_id_.erase(map_it);
+
+    return CancelResult::Cancelled;
+}
+
 std::optional<core::Price> OrderBook::best_bid() const {
     if (bids_.empty()) return std::nullopt;
     return bids_.begin()->first;

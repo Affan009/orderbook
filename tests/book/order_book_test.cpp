@@ -8,6 +8,7 @@
 using namespace std::chrono_literals;
 using namespace orderbook::core;
 using orderbook::book::AddResult;
+using orderbook::book::CancelResult;
 using orderbook::book::OrderBook;
 
 TEST(OrderBook, EmptyBookHasNoBestPrices) {
@@ -169,4 +170,82 @@ TEST(OrderBook, PrintsOnlyAsksWhenNoBids) {
     EXPECT_EQ(out.str(),
               "ASK 18750 qty=150 orders=1\n"
               "ASK 18745 qty=75 orders=1\n");
+}
+
+TEST(OrderBook, CancelLowersDepthAndKeepsLevelWithOtherOrders) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{18742}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{2}, Side::Buy, Price{18742}, Qty{200}, Timestamp{2ns}),
+              AddResult::Accepted);
+
+    EXPECT_EQ(book.cancel_order(OrderId{1}), CancelResult::Cancelled);
+    EXPECT_EQ(book.depth_at(Side::Buy, Price{18742}), Qty{200});
+    EXPECT_EQ(book.best_bid(), Price{18742});
+}
+
+TEST(OrderBook, CancellingLastBidAtBestPriceMakesNextPriceBest) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{18742}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{2}, Side::Buy, Price{18740}, Qty{50}, Timestamp{2ns}),
+              AddResult::Accepted);
+
+    EXPECT_EQ(book.cancel_order(OrderId{1}), CancelResult::Cancelled);
+    EXPECT_EQ(book.best_bid(), Price{18740});
+}
+
+TEST(OrderBook, CancellingLastAskAtBestPriceMakesNextPriceBest) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Sell, Price{18745}, Qty{75}, Timestamp{1ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.add_order(OrderId{2}, Side::Sell, Price{18750}, Qty{120}, Timestamp{2ns}),
+              AddResult::Accepted);
+
+    EXPECT_EQ(book.cancel_order(OrderId{1}), CancelResult::Cancelled);
+    EXPECT_EQ(book.best_ask(), Price{18750});
+}
+
+TEST(OrderBook, CancellingOnlyOrderLeavesEmptyBook) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{18742}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+
+    EXPECT_EQ(book.cancel_order(OrderId{1}), CancelResult::Cancelled);
+    EXPECT_FALSE(book.best_bid().has_value());
+
+    // A leftover empty level would still print a row.
+    std::ostringstream out;
+    book.print_book(out);
+    EXPECT_EQ(out.str(), "");
+}
+
+TEST(OrderBook, CancellingUnknownIdLeavesBookUnchanged) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{18742}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+
+    EXPECT_EQ(book.cancel_order(OrderId{99}), CancelResult::UnknownOrderId);
+    EXPECT_EQ(book.depth_at(Side::Buy, Price{18742}), Qty{100});
+    EXPECT_EQ(book.best_bid(), Price{18742});
+}
+
+TEST(OrderBook, CancellingSameIdTwiceIsUnknownTheSecondTime) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{18742}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+
+    ASSERT_EQ(book.cancel_order(OrderId{1}), CancelResult::Cancelled);
+    EXPECT_EQ(book.cancel_order(OrderId{1}), CancelResult::UnknownOrderId);
+}
+
+TEST(OrderBook, CancelledIdCanBeAddedAgain) {
+    OrderBook book;
+    ASSERT_EQ(book.add_order(OrderId{1}, Side::Buy, Price{18742}, Qty{100}, Timestamp{1ns}),
+              AddResult::Accepted);
+    ASSERT_EQ(book.cancel_order(OrderId{1}), CancelResult::Cancelled);
+
+    EXPECT_EQ(book.add_order(OrderId{1}, Side::Sell, Price{18745}, Qty{75}, Timestamp{2ns}),
+              AddResult::Accepted);
+    EXPECT_EQ(book.best_ask(), Price{18745});
 }

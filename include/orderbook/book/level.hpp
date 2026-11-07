@@ -27,6 +27,11 @@ public:
         return queue_.insert(queue_.end(), order);
     }
 
+    void remove(iterator order_it) {
+        depth_ -= order_it->qty;
+        queue_.erase(order_it);
+    }
+
     core::Qty depth() const { return depth_; }
     std::size_t order_count() const { return queue_.size(); }
     bool empty() const { return queue_.empty(); }
