@@ -32,6 +32,20 @@ public:
         queue_.erase(order_it);
     }
 
+    void reduce(iterator order_it, core::Qty by) {
+        assert((order_it->qty > by) && "Reduction must leave a positive quantity");
+        order_it->qty -= by;
+        depth_ -= by;
+    }
+
+    core::Qty qty_ahead(iterator order_it) const {
+        core::Qty ahead{0};
+        for (auto it = queue_.begin(); it != order_it; ++it) {
+            ahead += it->qty;
+        }
+        return ahead;
+    }
+
     core::Qty depth() const { return depth_; }
     std::size_t order_count() const { return queue_.size(); }
     bool empty() const { return queue_.empty(); }

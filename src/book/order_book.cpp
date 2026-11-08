@@ -1,3 +1,4 @@
+#include <cassert>
 #include <optional>
 #include <ostream>
 
@@ -45,6 +46,109 @@ CancelResult OrderBook::cancel_order(core::OrderId id) {
     return CancelResult::Cancelled;
 }
 
+ModifyResult OrderBook::modify_order(
+    core::OrderId id,
+    core::Price new_price,
+    core::Qty new_qty,
+    core::Timestamp time
+) {
+    const auto map_it = orders_by_id_.find(id);
+    if (map_it == orders_by_id_.end()) return ModifyResult::UnknownOrderId;
+    if (new_qty == core::Qty{0}) return ModifyResult::ZeroQuantity;
+
+    const auto order_it = map_it->second;
+
+    const core::Side side = order_it->side;
+    const core::Price price = order_it->price;
+    const core::Qty qty = order_it->qty;
+
+    if (new_price == price && new_qty <= qty) {
+        if (new_qty < qty) {
+            [[maybe_unused]] const auto reduce_result = reduce_order(id, qty - new_qty);
+            assert(reduce_result == ReduceResult::Reduced);
+        }
+    } else {
+        [[maybe_unused]] const auto cancel_result = cancel_order(id);
+        assert(cancel_result == CancelResult::Cancelled);
+
+        [[maybe_unused]] const auto add_result = add_order(id, side, new_price, new_qty, time);
+        assert(add_result == AddResult::Accepted);
+    }
+
+    return ModifyResult::Modified;
+}
+
+ReduceResult OrderBook::reduce_order(core::OrderId id, core::Qty by) {
+    const auto map_it = orders_by_id_.find(id);
+    if (map_it == orders_by_id_.end()) return ReduceResult::UnknownOrderId;
+    if (by == core::Qty{0}) return ReduceResult::ZeroQuantity;
+
+    const auto order_it = map_it->second;
+
+    if (by >= order_it->qty) {
+        [[maybe_unused]] const auto result = cancel_order(id);
+        assert(result == CancelResult::Cancelled);
+        return ReduceResult::Removed;
+    }
+
+    const core::Side side = order_it->side;
+    const core::Price price = order_it->price;
+
+    auto& price_level = (side == core::Side::Buy) ? bids_[price] : asks_[price];
+    price_level.reduce(order_it, by);
+
+    return ReduceResult::Reduced;
+}
+
+ReplaceResult OrderBook::replace_order(
+    core::OrderId old_id,
+    core::OrderId new_id,
+    core::Price new_price,
+    core::Qty new_qty,
+    core::Timestamp time
+) {
+    const auto map_it = orders_by_id_.find(old_id);
+    if (map_it == orders_by_id_.end()) return ReplaceResult::UnknownOrderId;
+    if (new_qty == core::Qty{0}) return ReplaceResult::ZeroQuantity;
+    if (new_id != old_id && orders_by_id_.contains(new_id)) return ReplaceResult::DuplicateOrderId;
+
+    const auto order_it = map_it->second;
+
+    const core::Side side = order_it->side;
+
+    [[maybe_unused]] const auto cancel_result = cancel_order(old_id);
+    assert(cancel_result == CancelResult::Cancelled);
+
+    [[maybe_unused]] const auto add_result = add_order(new_id, side, new_price, new_qty, time);
+    assert(add_result == AddResult::Accepted);
+
+    return ReplaceResult::Replaced;
+}
+
+std::optional<Order> OrderBook::find_order(core::OrderId id) const {
+    const auto map_it = orders_by_id_.find(id);
+    if (map_it == orders_by_id_.end()) return std::nullopt;
+
+    return *(map_it->second);
+}
+
+std::optional<core::Qty> OrderBook::queue_ahead(core::OrderId id) const {
+    const auto map_it = orders_by_id_.find(id);
+    if (map_it == orders_by_id_.end()) return std::nullopt;
+
+    const auto order_it = map_it->second;
+
+    const core::Side side = order_it->side;
+    const core::Price price = order_it->price;
+
+    if (side == core::Side::Buy) {
+        const auto level_it = bids_.find(price);
+        return level_it->second.qty_ahead(order_it);
+    }
+    const auto level_it = asks_.find(price);
+    return level_it->second.qty_ahead(order_it);
+}
+
 std::optional<core::Price> OrderBook::best_bid() const {
     if (bids_.empty()) return std::nullopt;
     return bids_.begin()->first;
@@ -57,13 +161,13 @@ std::optional<core::Price> OrderBook::best_ask() const {
 
 core::Qty OrderBook::depth_at(core::Side side, core::Price price) const {
     if (side == core::Side::Buy) {
-        const auto it = bids_.find(price);
-        if (it == bids_.end()) return core::Qty{0};
-        return it->second.depth();
+        const auto level_it = bids_.find(price);
+        if (level_it == bids_.end()) return core::Qty{0};
+        return level_it->second.depth();
     }
-    const auto it = asks_.find(price);
-    if (it == asks_.end()) return core::Qty{0};
-    return it->second.depth();
+    const auto level_it = asks_.find(price);
+    if (level_it == asks_.end()) return core::Qty{0};
+    return level_it->second.depth();
 }
 
 void OrderBook::print_book(std::ostream& out) const {
