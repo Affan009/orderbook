@@ -20,7 +20,15 @@ enum class CancelResult : std::uint8_t { Cancelled, UnknownOrderId };
 // Tells the result of an order modification/reduction/replacement to the book.
 enum class ModifyResult : std::uint8_t { Modified, UnknownOrderId, ZeroQuantity };
 enum class ReduceResult : std::uint8_t { Reduced, Removed, UnknownOrderId, ZeroQuantity };
-enum class ReplaceResult : std::uint8_t { Replaced, UnknownOrderId, DuplicateOrderId, ZeroQuantity };
+enum class ReplaceResult : std::uint8_t {
+    Replaced, UnknownOrderId, DuplicateOrderId, ZeroQuantity
+};
+
+// Tells which rule check_invariants() found broken first.
+enum class InvariantViolation : std::uint8_t {
+    EmptyLevel, NonPositiveQty, WrongSide, WrongPrice,
+    IndexMismatch, DepthMismatch, CountMismatch
+};
 
 // Orderbook structure that collects and sorts bids and asks according to price level.
 class OrderBook {
@@ -54,8 +62,11 @@ public:
     std::optional<core::Price> best_ask() const;
     core::Qty depth_at(core::Side side, core::Price price) const;
     void print_book(std::ostream& out) const;
+    [[nodiscard]] std::optional<InvariantViolation> check_invariants() const;
 
 private:
+    friend struct OrderBookTestAccess;
+
     std::map<core::Price, Level, std::greater<>> bids_;
     std::map<core::Price, Level> asks_;
     std::unordered_map<core::OrderId, Level::iterator> orders_by_id_;

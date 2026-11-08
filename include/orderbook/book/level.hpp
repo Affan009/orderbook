@@ -49,6 +49,8 @@ public:
     core::Qty depth() const { return depth_; }
     std::size_t order_count() const { return queue_.size(); }
     bool empty() const { return queue_.empty(); }
+    auto begin() const { return queue_.begin(); }
+    auto end() const { return queue_.end(); }
 
 private:
     std::list<Order> queue_;

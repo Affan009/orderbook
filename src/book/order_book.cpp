@@ -188,4 +188,50 @@ void OrderBook::print_book(std::ostream& out) const {
     }
 }
 
+std::optional<InvariantViolation> OrderBook::check_invariants() const {
+    std::size_t order_count{0};
+
+    for(const auto& [price, level] : bids_) {
+        if (level.empty()) return InvariantViolation::EmptyLevel;
+
+        core::Qty agg_qty{0};
+        for (auto it = level.begin(); it != level.end(); ++it) {
+            if (it->qty == core::Qty{0}) return InvariantViolation::NonPositiveQty;
+            else if (it->side != core::Side::Buy) return InvariantViolation::WrongSide;
+            else if (it->price != price) return InvariantViolation::WrongPrice;
+
+            const auto map_it = orders_by_id_.find(it->id);
+            if (map_it == orders_by_id_.end() ||
+                &(*map_it->second) != &(*it)) return InvariantViolation::IndexMismatch;
+            
+            agg_qty += it->qty;
+            order_count++;
+        }
+        if (agg_qty != level.depth()) return InvariantViolation::DepthMismatch;
+    }
+
+    for(const auto& [price, level] : asks_) {
+        if (level.empty()) return InvariantViolation::EmptyLevel;
+
+        core::Qty agg_qty{0};
+        for (auto it = level.begin(); it != level.end(); ++it) {
+            if (it->qty == core::Qty{0}) return InvariantViolation::NonPositiveQty;
+            else if (it->side != core::Side::Sell) return InvariantViolation::WrongSide;
+            else if (it->price != price) return InvariantViolation::WrongPrice;
+
+            const auto map_it = orders_by_id_.find(it->id);
+            if (map_it == orders_by_id_.end() ||
+                &(*map_it->second) != &(*it)) return InvariantViolation::IndexMismatch;
+            
+            agg_qty += it->qty;
+            order_count++;
+        }
+        if (agg_qty != level.depth()) return InvariantViolation::DepthMismatch;
+    }
+
+    if (order_count != orders_by_id_.size()) return InvariantViolation::CountMismatch;
+
+    return std::nullopt;
+}
+
 } // namespace orderbook::book
