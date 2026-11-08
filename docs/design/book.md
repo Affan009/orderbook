@@ -10,11 +10,15 @@
 
 | Operation | Example | Effect |
 |---|---|---|
-| `add_order(id, side, price, qty, time)` | Alice: buy 100 @ 18742 | adds an order with the given parameters to the back of its price level queue in the order book. It rejects invalid orders (duplicate order id, or a zero quantity etc.) |
-| `best_bid()` / `best_ask()` | → 18742 / 18745 | returns the best price for that side, or nothing if that side is empty |
-| `depth_at(side, price)` | buy @ 18742 → 300 | returns the depth (total resting quantity) of the given side on the given price level. It returns 0 qty if no orders rest at that price |
-| `cancel_order(id)` *(planned)* | cancel #1 | removes an order from its queue, and subtracts from that price level's depth. It erases the level if it becomes empty. |
-| `modify_order(id, …)` *(planned)* | #3 to 150 | modifies the order which may result in changing its priority (a quantity reduction keeps its place, a price change or quantity increase loses it) |
+| `add_order(id, side, price, qty, time)` | Alice: buy 100 @ 18742 | adds an order with the given parameters to the back of its price level queue in the order book. It rejects duplicate order id and zero quantity. |
+| `best_bid()` / `best_ask()` | → 18742 / 18745 | returns the best price for that side, or nothing if that side is empty. |
+| `depth_at(side, price)` | buy @ 18742 → 300 | returns the depth (total resting quantity) of the given side on the given price level. It returns 0 qty if no orders rest at that price. |
+| `cancel_order(id)` | cancel #1 | removes an order from its queue, and subtracts from that price level's depth. It erases the level if it becomes empty. It rejects unknown order ids. |
+| `modify_order(id, price, qty, time)` | #1 to 60 @ 18742 | modifies the order's price and quantity which may result in changing its priority. A smaller quantity at the same price (or no change at all) keeps its place and arrival time; any other change sends it to the back of the queue with time. It rejects unknown order ids and zero quantity. |
+| `reduce_order(id, by)` | #1 by 30 | lowers the order's quantity by `by` and keeps its place; if `by` is at least what is left, then it removes the order entirely. It rejects unknown order ids and zero quantity. |
+| `replace_order(old_id, new_id, price, qty, time)` | #1 → #7 @ 18742 | retires `old_id` and adds `new_id` at the back with the old order’s side and the given `price`, `qty` and `time`. It rejects unknown old order id, zero quantity and a `new_id` that is already present. |
+| `find_order(id)` | #2 → 200 @ 18742 | returns a copy of the resting order, or nothing if the id doesn't correspond to an order. |
+| `queue_ahead(id)` | #2 → 100 | returns the total quantity ahead of the order in the queue at its price, or nothing if the id doesn't correspond to an order. |
 
 ## The order struct
 
@@ -36,7 +40,7 @@
 
 * A `Level` holds the orders resting at one price: their queue and their depth. It is a class, unlike `Order`, because it has rules to protect: its depth must always equal the sum of its orders' quantities, and all its orders must have the same side and price. Its queue and depth are private, so only its own functions can change them. An `assert` in `add` checks the side and price rule, in debug builds only.
 * Orders at one price wait in a FIFO queue, which is what gives time priority inside the price level.
-* The queue is a `std::list<Order>`. It adds at the back, takes from the front (on matching, more on that later), and can remove from the middle of the list (cancel, planned), each in constant time, given an iterator.
+* The queue is a `std::list<Order>`. It adds at the back, takes from the front (on matching, more on that later), and can remove from the middle of the list, each in constant time, given an iterator.
 * List iterators are valid even when other elements are removed or added, which is why they can be safely stored by `orders_by_id_`.
 * Each order is a separate list node, scattered in memory (one heap allocation per order), so walking a queue can cause cache misses and affect performance.
 * Note: **Why not `std::vector`?** Removing from the middle would then be an `O(n)` operation, where `n` is the number of orders in the level. It would also invalidate the stored iterators.
@@ -51,13 +55,27 @@
 * The iterator leads straight to the order, whose `side` and `price` identify its level, so the index doesn't need to store them again.
 * `std::unordered_map` needs a hash for its key, so `std::hash` is specialised for `StrongType` (in `types.hpp`). The specialisation is outside the namespace of `orderbook::core`, because `std::unordered_map` looks for `std::hash`, which belongs to the standard library. A hash template written inside our namespace would be a separate template that it never uses.
 
-## Best prices and rejected orders
+## Changing an order
+
+* A resting order can change in four ways. A trader asks the exchange to modify it (a new price and quantity) or to cancel it; a market data feed reports that an order was reduced (part of it cancelled) or replaced (moved to a new id). The book serves both callers, the matching engine and anyone rebuilding the book from a feed.
+* `modify_order` states what the order should become, that is, a target state, so resending the same price and quantity is allowed and changes nothing. `reduce_order` states how much the quantity is reduced `by`, so reducing by zero is rejected: a feed never reports zero, so a zero can only come from a bug, such as a parser error, and is rejected.
+* Priority follows CME's rules: a smaller quantity at the same price keeps its place, because it only gives up part of its claim, which helps the orders behind it and harms no one. A price change or a larger quantity goes to the back of the queue with a new arrival time, because otherwise it would get more, or a different price, ahead of orders that arrived earlier.
+* `replace_order` handles ITCH's Order Replace message: the old id is retired and the new one joins the back of the queue with the given details. The message does not carry the side of the order, so it is copied from the old order.
+* Cancelling an unknown id is a normal event, not an error: an order can be filled just before the cancel arrives. It returns `UnknownOrderId` instead of throwing.
+* Every operation checks everything before it changes anything, so a rejected request leaves the book exactly as it was.
+* `modify_order` and `replace_order` are built from `cancel_order`, `add_order` and `reduce_order`, so each rule lives in its own place as a function. The cost is a few repeated lookups, which we will measure later on.
+
+## Queries and results
 
 * `best_bid()` and `best_ask()` return `std::optional<Price>` because for empty sides, we can return `std::nullopt` instead of a sentinel value. The reason for not using a sentinel (like 0 or -1) is because they may be valid prices. With `optional`, the "no price" case is visible in the return type.
 * `add_order` returns an `AddResult` enum: `Accepted`, `ZeroQuantity` or `DuplicateOrderId`. It is `[[nodiscard]]`, so the compiler warns when the return value is not checked.
 * Note: **Why an `AddResult` enum and not a `bool` or an exception?** This is because it doesn't tell us the exact reason why an order was rejected. An exception also doesn't fit as they are meant for unexpected failures and are slow when thrown, while rejections are a routine part of a book's work.
-* A rejected order leaves the book unchanges, because both checks run before anything is modified.
-* A negative quantity isn't a rejection, becuase `Qty` must always be non-negative, so it is a programming error rather than a routine input. The `assert` in `Qty` catches it in debug builds, but is removed in the release builds, so inputs from outside the program must be validated before it becomes a `Qty`.
+* A rejected order leaves the book unchanged, because both checks run before anything is modified.
+* A negative quantity isn't a rejection, because `Qty` must always be non-negative, so it is a programming error rather than a routine input. The `assert` in `Qty` catches it in debug builds, but is removed in the release builds, so inputs from outside the program must be validated before it becomes a `Qty`.
+* `find_order(id)` returns a copy of the order, wrapped in `std::optional`, so a caller can look at it but cannot change the book through it.
+* `queue_ahead(id)` returns `std::optional<Qty>`: `Qty{0}` means that there are no orders ahead of it, i.e., it is the first in the queue. Nothing means the order is not present in the book. If both returned 0, a cancelled order would look like it is the first in the queue, which would mislead the backtester.
+* `depth_at` returns `Qty{0}` for an empty price instead, because for a price, "no orders" and "zero depth" are equivalent.
+* Every operation that changes the book returns its own result enum (`CancelResult`, `ModifyResult`, `ReduceResult`, `ReplaceResult`), all `[[nodiscard]]`. New rejection reasons will be added as new values in these enums, so the functions' signatures never change. What happened to the book, such as fills, will be reported separately by an event listener (planned).
 
 ## References
 
@@ -68,9 +86,14 @@
   — order book requirements and storage, chapter 2, printed pp. 30–34 (PDF pp. 47–51).
 - CME Group. *Order Functionalities*.
   https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457414497/Order+Functionalities
-  — which order changes lose queue position ("Order Modification").
+  —  which order changes lose queue position ("Order Modification"), used for modify_order.
 - Jane Street Tech Blog (2010). *Making something out of nothing (or, why None is better than NaN and NULL)*.
   https://blog.janestreet.com/making-something-out-of-nothing-or-why-none-is-better-than-nan-and-null/
   — why a "maybe a value" type beats a sentinel.
 - hftengineer. *Order book data structures*. https://hftengineer.com/posts/order-book-data-structures/
   — the sorted map design used here and when it is appropriate.
+- Nasdaq. *TotalView-ITCH 5.0 Specification*. section 1.4 (Order Executed, Cancel, Delete and Replace messages).
+  — which fields each feed event carries; why replace copies the side from the original order.
+- Silahian, A. (2026). *Cancel-First Order Book Design: From ITCH 5.0 to L1D Hot Caches*. Electronic Trading Hub.
+  https://electronictradinghub.com/cancel-first-order-book-design-from-itch-5-0-to-l1d-hot-caches/
+  — why cancels dominate real order flow; which ITCH message each book operation handles.
