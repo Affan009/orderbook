@@ -1,6 +1,6 @@
 # orderbook
 
-A C++ implementation of a limit order book and a matching engine.
+A C++ implementation of a limit order book.
 
 ## Background
 
@@ -30,11 +30,28 @@ ctest --preset <preset>
 
 ## Usage
 
-* Nothing particular right now, build and run the tests.
+* Libraries: `orderbook::core` (value types) and `orderbook::book` (the order book, links `core`).
+* Linking: add this repository with `add_subdirectory(orderbook)`, then `target_link_libraries(<target> PRIVATE orderbook::book)`.
+* Units: prices are whole numbers of ticks, quantities whole numbers of lots.
+
+## Documentation
+
+* `docs/design/core.md`: value types.
+* `docs/design/book.md`: storage, operations, invariant checker.
+* `docs/design/events.md`: events and the listener.
 
 ## Project Status
 
-* It is currently in the initial steps. Next is defining the core types to be used in the project.
+- [x] Core types: `Price`, `Qty`, `OrderId`, `Side`, `Timestamp`, `SeqNum`, `Instrument`
+- [x] Resting orders for one instrument: add, cancel, modify, reduce, replace
+- [x] Price-time priority, with modify keeping or losing queue position
+- [x] Queries: best bid/ask, depth at a price, order lookup, quantity ahead in the queue
+- [x] Text view of the book
+- [x] Invariant checker
+- [x] Events for every change and rejection, sent to a listener
+- [ ] Matching (orders that cross the spread)
+- [ ] Market, IOC and FOK orders
+- [ ] Benchmarks
 
 ## Contributing
 
