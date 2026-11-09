@@ -9,16 +9,22 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(ORDERBOOK_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
 if(ORDERBOOK_SANITIZE)
-    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all)
+    add_compile_options(
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
+        -fno-sanitize-recover=all
+    )
     add_link_options(-fsanitize=address,undefined)
 endif()
 
 # ---- Libraries ----
 
-add_library(orderbook_core src/core/types.cpp)
+# Header-only: core has no source files, so it is an INTERFACE library (it compiles nothing itself;
+# targets that link it get its include directory). Its headers are compiled, with warnings on,
+# by every source and test that includes them.
+add_library(orderbook_core INTERFACE)
 add_library(orderbook::core ALIAS orderbook_core)
-target_include_directories(orderbook_core PUBLIC include)
-target_compile_options(orderbook_core PRIVATE -Wall -Wextra -Wpedantic)
+target_include_directories(orderbook_core INTERFACE include)
 
 add_library(orderbook_book src/book/order_book.cpp)
 add_library(orderbook::book ALIAS orderbook_book)

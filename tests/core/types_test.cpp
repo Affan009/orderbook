@@ -16,6 +16,7 @@ concept Subtractable = requires(T a, T b) { a - b; };
 static_assert(Addable<int>, "sanity check: ints can be added");
 static_assert(!Addable<Price>, "Price + Price must not compile");
 static_assert(!Addable<OrderId>, "OrderId + OrderId must not compile");
+static_assert(!Addable<SeqNum>, "SeqNum + SeqNum must not compile");
 static_assert(Addable<Qty>, "Qty + Qty must compile");
 static_assert(Subtractable<Qty>, "Qty - Qty must compile");
 
@@ -31,6 +32,13 @@ static_assert(!std::is_convertible_v<OrderId, Price>,
               "an OrderId must not silently become a Price");
 static_assert(!std::is_convertible_v<Price, OrderId>,
               "a Price must not silently become an OrderId");
+
+static_assert(!std::is_convertible_v<std::int64_t, SeqNum>,
+              "an int64_t must not silently become a SeqNum");
+static_assert(!std::is_convertible_v<SeqNum, OrderId>,
+              "a SeqNum must not silently become an OrderId");
+static_assert(!std::is_convertible_v<OrderId, SeqNum>,
+              "an OrderId must not silently become a SeqNum");
 
 static_assert(!std::is_convertible_v<int, Side>, "an int must not silently become a Side");
 static_assert(!std::is_convertible_v<Side, int>, "a Side must not silently become an int");

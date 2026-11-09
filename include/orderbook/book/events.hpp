@@ -20,7 +20,7 @@ using RejectReason = std::variant<AddResult, CancelResult, ModifyResult,
 
 // An order joined the book.
 struct OrderAdded {
-    std::uint64_t seq;
+    core::SeqNum seq;
     core::OrderId id;
     core::Side side;
     core::Price price;
@@ -32,7 +32,7 @@ struct OrderAdded {
 
 // An order's quantity went down; it keeps its place in the queue.
 struct OrderReduced {
-    std::uint64_t seq;
+    core::SeqNum seq;
     core::OrderId id;
     core::Side side;
     core::Price price;
@@ -45,7 +45,7 @@ struct OrderReduced {
 
 // An order left the book.
 struct OrderRemoved {
-    std::uint64_t seq;
+    core::SeqNum seq;
     core::OrderId id;
     core::Side side;
     core::Price price;
@@ -58,7 +58,7 @@ struct OrderRemoved {
 
 // A call was refused; the book did not change.
 struct OrderRejected {
-    std::uint64_t seq;
+    core::SeqNum seq;
     Operation operation;
     core::OrderId id;
     RejectReason reason;

@@ -52,7 +52,7 @@ constexpr Qty operator+(Qty a, Qty b) { a += b; return a; }
 constexpr Qty operator-(Qty a, Qty b) { a -= b; return a; }
 
 // Side clarifies the side of the order and what it can be matched to.
-enum class Side { Buy, Sell };
+enum class Side : std::uint8_t { Buy, Sell };
 
 // Timestamp is the arrival time of an order, measured in nanoseconds.
 // The exchange provides this to the orderbook.
@@ -71,9 +71,14 @@ using TickSize = StrongType<struct TickSizeTag>;
 // Ex: 1 share = fixed_point_scale, or 0.001 BTC step = fixed_point_scale / 1000.
 using LotSize = StrongType<struct LotSizeTag>;
 
+// SeqNum numbers the events of one book: 1, 2, 3, ... with no gaps,
+// so a reader can spot a missed event.
+using SeqNum = StrongType<struct SeqNumTag>;
+
 } // namespace orderbook::core
 
-// Specialization of std::hash to allow hashing of a StrongType using the hash of the number inside it.
+// Specialization of std::hash to allow hashing of a
+// StrongType using the hash of the number inside it.
 // (std::unordered_map<> requires this)
 template <typename Tag>
 struct std::hash<orderbook::core::StrongType<Tag>> {

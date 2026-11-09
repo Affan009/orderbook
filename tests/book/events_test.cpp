@@ -32,21 +32,24 @@ using orderbook::book::ReplaceResult;
 // They must live in the events' namespace so GoogleTest finds them.
 namespace orderbook::book {
 void PrintTo(const OrderAdded& e, std::ostream* os) {
-    *os << "Added{seq=" << e.seq << " id=" << e.id.value() << " side=" << static_cast<int>(e.side)
+    *os << "Added{seq=" << e.seq.value() << " id=" << e.id.value()
+        << " side=" << static_cast<int>(e.side)
         << " price=" << e.price.value() << " qty=" << e.qty.value() << " last=" << e.last << "}";
 }
 void PrintTo(const OrderReduced& e, std::ostream* os) {
-    *os << "Reduced{seq=" << e.seq << " id=" << e.id.value() << " side=" << static_cast<int>(e.side)
+    *os << "Reduced{seq=" << e.seq.value() << " id=" << e.id.value()
+        << " side=" << static_cast<int>(e.side)
         << " price=" << e.price.value() << " qty=" << e.qty.value() << " by=" << e.by.value()
         << " last=" << e.last << "}";
 }
 void PrintTo(const OrderRemoved& e, std::ostream* os) {
-    *os << "Removed{seq=" << e.seq << " id=" << e.id.value() << " side=" << static_cast<int>(e.side)
+    *os << "Removed{seq=" << e.seq.value() << " id=" << e.id.value()
+        << " side=" << static_cast<int>(e.side)
         << " price=" << e.price.value() << " qty=" << e.qty.value()
         << " reason=" << static_cast<int>(e.reason) << " last=" << e.last << "}";
 }
 void PrintTo(const OrderRejected& e, std::ostream* os) {
-    *os << "Rejected{seq=" << e.seq << " operation=" << static_cast<int>(e.operation)
+    *os << "Rejected{seq=" << e.seq.value() << " operation=" << static_cast<int>(e.operation)
         << " id=" << e.id.value() << " reason=(alternative " << e.reason.index() << ", value ";
     std::visit([os](auto value) { *os << static_cast<int>(value); }, e.reason);
     *os << ") last=" << e.last << "}";
@@ -85,7 +88,7 @@ TEST_F(EventBook, AddSendsOrderAdded) {
               AddResult::Accepted);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
     };
@@ -101,13 +104,13 @@ TEST_F(EventBook, SequenceNumbersCountEveryEventFromOne) {
     ASSERT_EQ(book.cancel_order(OrderId{1}), CancelResult::Cancelled);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderAdded{.seq = 2, .id = OrderId{10}, .side = Side::Sell, .price = Price{18745},
+        OrderAdded{.seq = SeqNum{2}, .id = OrderId{10}, .side = Side::Sell, .price = Price{18745},
                    .qty = Qty{75},
                    .last = true},
-        OrderRemoved{.seq = 3, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderRemoved{.seq = SeqNum{3}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{100},
                      .reason = RemoveReason::Cancelled, .last = true},
     };
@@ -121,10 +124,10 @@ TEST_F(EventBook, PartialReduceSendsReduced) {
     ASSERT_EQ(book.reduce_order(OrderId{1}, Qty{40}), ReduceResult::Reduced);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderReduced{.seq = 2, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderReduced{.seq = SeqNum{2}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{60},
                      .by = Qty{40}, .last = true},
     };
@@ -139,13 +142,13 @@ TEST_F(EventBook, CancelReportsTheQuantityThatLeftTheBook) {
     ASSERT_EQ(book.cancel_order(OrderId{1}), CancelResult::Cancelled);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderReduced{.seq = 2, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderReduced{.seq = SeqNum{2}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{70},
                      .by = Qty{30}, .last = true},
-        OrderRemoved{.seq = 3, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderRemoved{.seq = SeqNum{3}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{70},
                      .reason = RemoveReason::Cancelled, .last = true},
     };
@@ -159,9 +162,9 @@ TEST_F(EventBook, ReduceTakingTheWholeOrderSendsRemoved) {
     ASSERT_EQ(book.reduce_order(OrderId{1}, Qty{150}), ReduceResult::Removed);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100}, .last = true},
-        OrderRemoved{.seq = 2, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderRemoved{.seq = SeqNum{2}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{100}, .reason = RemoveReason::Reduced, .last = true},
     };
     EXPECT_EQ(recorder.events, expected);
@@ -175,10 +178,10 @@ TEST_F(EventBook, ModifyDownAtSamePriceSendsReduced) {
               ModifyResult::Modified);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderReduced{.seq = 2, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderReduced{.seq = SeqNum{2}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{60},
                      .by = Qty{40}, .last = true},
     };
@@ -204,11 +207,11 @@ TEST_F(EventBook, ModifyUpSendsRemovedThenAdded) {
               ModifyResult::Modified);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100}, .last = true},
-        OrderRemoved{.seq = 2, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderRemoved{.seq = SeqNum{2}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{100}, .reason = RemoveReason::Modified, .last = false},
-        OrderAdded{.seq = 3, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{3}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{150}, .last = true},
     };
     EXPECT_EQ(recorder.events, expected);
@@ -222,13 +225,13 @@ TEST_F(EventBook, ModifyToNewPriceSendsRemovedThenAdded) {
               ModifyResult::Modified);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{10}, .side = Side::Sell, .price = Price{18745},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{10}, .side = Side::Sell, .price = Price{18745},
                    .qty = Qty{75},
                    .last = true},
-        OrderRemoved{.seq = 2, .id = OrderId{10}, .side = Side::Sell, .price = Price{18745},
+        OrderRemoved{.seq = SeqNum{2}, .id = OrderId{10}, .side = Side::Sell, .price = Price{18745},
                      .qty = Qty{75},
                      .reason = RemoveReason::Modified, .last = false},
-        OrderAdded{.seq = 3, .id = OrderId{10}, .side = Side::Sell, .price = Price{18744},
+        OrderAdded{.seq = SeqNum{3}, .id = OrderId{10}, .side = Side::Sell, .price = Price{18744},
                    .qty = Qty{75},
                    .last = true},
     };
@@ -243,13 +246,13 @@ TEST_F(EventBook, ReplaceSendsRemovedOldThenAddedNew) {
               ReplaceResult::Replaced);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderRemoved{.seq = 2, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderRemoved{.seq = SeqNum{2}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{100},
                      .reason = RemoveReason::Replaced, .last = false},
-        OrderAdded{.seq = 3, .id = OrderId{20}, .side = Side::Buy, .price = Price{18743},
+        OrderAdded{.seq = SeqNum{3}, .id = OrderId{20}, .side = Side::Buy, .price = Price{18743},
                    .qty = Qty{80},
                    .last = true},
     };
@@ -264,13 +267,13 @@ TEST_F(EventBook, ReplaceKeepingTheSameIdSendsRemovedThenAdded) {
               ReplaceResult::Replaced);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderRemoved{.seq = 2, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderRemoved{.seq = SeqNum{2}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                      .qty = Qty{100},
                      .reason = RemoveReason::Replaced, .last = false},
-        OrderAdded{.seq = 3, .id = OrderId{1}, .side = Side::Buy, .price = Price{18741},
+        OrderAdded{.seq = SeqNum{3}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18741},
                    .qty = Qty{50},
                    .last = true},
     };
@@ -286,10 +289,10 @@ TEST_F(EventBook, RejectedAddSendsOneRejectedAndChangesNothing) {
               AddResult::DuplicateOrderId);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderRejected{.seq = 2, .operation = Operation::Add, .id = OrderId{1},
+        OrderRejected{.seq = SeqNum{2}, .operation = Operation::Add, .id = OrderId{1},
                       .reason = AddResult::DuplicateOrderId, .last = true},
     };
     EXPECT_EQ(recorder.events, expected);
@@ -307,7 +310,7 @@ TEST_F(EventBook, RejectedAddWithZeroQuantity) {
               AddResult::ZeroQuantity);
 
     const std::vector<BookEvent> expected{
-        OrderRejected{.seq = 1, .operation = Operation::Add, .id = OrderId{5},
+        OrderRejected{.seq = SeqNum{1}, .operation = Operation::Add, .id = OrderId{5},
                       .reason = AddResult::ZeroQuantity, .last = true},
     };
     EXPECT_EQ(recorder.events, expected);
@@ -319,7 +322,7 @@ TEST_F(EventBook, RejectedCancelOfUnknownId) {
     ASSERT_EQ(book.cancel_order(OrderId{99}), CancelResult::UnknownOrderId);
 
     const std::vector<BookEvent> expected{
-        OrderRejected{.seq = 1, .operation = Operation::Cancel, .id = OrderId{99},
+        OrderRejected{.seq = SeqNum{1}, .operation = Operation::Cancel, .id = OrderId{99},
                       .reason = CancelResult::UnknownOrderId, .last = true},
     };
     EXPECT_EQ(recorder.events, expected);
@@ -334,12 +337,12 @@ TEST_F(EventBook, RejectedModifies) {
               ModifyResult::ZeroQuantity);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderRejected{.seq = 2, .operation = Operation::Modify, .id = OrderId{99},
+        OrderRejected{.seq = SeqNum{2}, .operation = Operation::Modify, .id = OrderId{99},
                       .reason = ModifyResult::UnknownOrderId, .last = true},
-        OrderRejected{.seq = 3, .operation = Operation::Modify, .id = OrderId{1},
+        OrderRejected{.seq = SeqNum{3}, .operation = Operation::Modify, .id = OrderId{1},
                       .reason = ModifyResult::ZeroQuantity, .last = true},
     };
     EXPECT_EQ(recorder.events, expected);
@@ -353,12 +356,12 @@ TEST_F(EventBook, RejectedReduces) {
     ASSERT_EQ(book.reduce_order(OrderId{1}, Qty{0}), ReduceResult::ZeroQuantity);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderRejected{.seq = 2, .operation = Operation::Reduce, .id = OrderId{99},
+        OrderRejected{.seq = SeqNum{2}, .operation = Operation::Reduce, .id = OrderId{99},
                       .reason = ReduceResult::UnknownOrderId, .last = true},
-        OrderRejected{.seq = 3, .operation = Operation::Reduce, .id = OrderId{1},
+        OrderRejected{.seq = SeqNum{3}, .operation = Operation::Reduce, .id = OrderId{1},
                       .reason = ReduceResult::ZeroQuantity, .last = true},
     };
     EXPECT_EQ(recorder.events, expected);
@@ -379,17 +382,17 @@ TEST_F(EventBook, RejectedReplaces) {
               ReplaceResult::ZeroQuantity);
 
     const std::vector<BookEvent> expected{
-        OrderAdded{.seq = 1, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{1}, .id = OrderId{1}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{100},
                    .last = true},
-        OrderAdded{.seq = 2, .id = OrderId{2}, .side = Side::Buy, .price = Price{18742},
+        OrderAdded{.seq = SeqNum{2}, .id = OrderId{2}, .side = Side::Buy, .price = Price{18742},
                    .qty = Qty{200},
                    .last = true},
-        OrderRejected{.seq = 3, .operation = Operation::Replace, .id = OrderId{99},
+        OrderRejected{.seq = SeqNum{3}, .operation = Operation::Replace, .id = OrderId{99},
                       .reason = ReplaceResult::UnknownOrderId, .last = true},
-        OrderRejected{.seq = 4, .operation = Operation::Replace, .id = OrderId{1},
+        OrderRejected{.seq = SeqNum{4}, .operation = Operation::Replace, .id = OrderId{1},
                       .reason = ReplaceResult::DuplicateOrderId, .last = true},
-        OrderRejected{.seq = 5, .operation = Operation::Replace, .id = OrderId{1},
+        OrderRejected{.seq = SeqNum{5}, .operation = Operation::Replace, .id = OrderId{1},
                       .reason = ReplaceResult::ZeroQuantity, .last = true},
     };
     EXPECT_EQ(recorder.events, expected);

@@ -33,7 +33,7 @@ void OrderBook::send(const Event& event) {
 
 template <typename Result>
 Result OrderBook::reject(Operation operation, core::OrderId id, Result reason) {
-    send(OrderRejected{.seq = next_seq_++, .operation = operation, .id = id,
+    send(OrderRejected{.seq = core::SeqNum{next_seq_++}, .operation = operation, .id = id,
                        .reason = reason, .last = true});
     return reason;
 }
@@ -82,7 +82,7 @@ AddResult OrderBook::add_order(
     }
 
     insert_resting(Order{id, side, price, qty, arrival_time});
-    send(OrderAdded{.seq = next_seq_++, .id = id, .side = side, .price = price,
+    send(OrderAdded{.seq = core::SeqNum{next_seq_++}, .id = id, .side = side, .price = price,
                     .qty = qty, .last = true});
 
     return AddResult::Accepted;
@@ -97,7 +97,7 @@ CancelResult OrderBook::cancel_order(core::OrderId id) {
     }
 
     const Order removed = remove_resting(map_it->second);
-    send(OrderRemoved{.seq = next_seq_++, .id = removed.id, .side = removed.side,
+    send(OrderRemoved{.seq = core::SeqNum{next_seq_++}, .id = removed.id, .side = removed.side,
                       .price = removed.price, .qty = removed.qty,
                       .reason = RemoveReason::Cancelled, .last = true});
     return CancelResult::Cancelled;
@@ -128,19 +128,20 @@ ModifyResult OrderBook::modify_order(
         if (new_qty < qty) {
             const core::Qty by = qty - new_qty;
             const Order reduced = reduce_resting(order_it, by);
-            send(OrderReduced{.seq = next_seq_++, .id = reduced.id, .side = reduced.side,
-                              .price = reduced.price, .qty = reduced.qty, .by = by, .last = true});
+            send(OrderReduced{.seq = core::SeqNum{next_seq_++}, .id = reduced.id,
+                              .side = reduced.side, .price = reduced.price,
+                              .qty = reduced.qty, .by = by, .last = true});
         }
         // (new_qty == qty changes nothing, so nothing is sent.)
     } else {
         // Larger, or a new price: it loses its place, so it leaves and re-enters at the back.
         const Order removed = remove_resting(order_it);
-        send(OrderRemoved{.seq = next_seq_++, .id = removed.id, .side = removed.side,
+        send(OrderRemoved{.seq = core::SeqNum{next_seq_++}, .id = removed.id, .side = removed.side,
                           .price = removed.price, .qty = removed.qty,
                           .reason = RemoveReason::Modified, .last = false});
 
         insert_resting(Order{id, side, new_price, new_qty, time});
-        send(OrderAdded{.seq = next_seq_++, .id = id, .side = side,
+        send(OrderAdded{.seq = core::SeqNum{next_seq_++}, .id = id, .side = side,
                         .price = new_price, .qty = new_qty, .last = true});
     }
 
@@ -161,14 +162,14 @@ ReduceResult OrderBook::reduce_order(core::OrderId id, core::Qty by) {
     // Taking at least what remains removes the order (the feed's "partial cancel" can take it all).
     if (by >= order_it->qty) {
         const Order removed = remove_resting(order_it);
-        send(OrderRemoved{.seq = next_seq_++, .id = removed.id, .side = removed.side,
+        send(OrderRemoved{.seq = core::SeqNum{next_seq_++}, .id = removed.id, .side = removed.side,
                           .price = removed.price, .qty = removed.qty,
                           .reason = RemoveReason::Reduced, .last = true});
         return ReduceResult::Removed;
     }
 
     const Order reduced = reduce_resting(order_it, by);
-    send(OrderReduced{.seq = next_seq_++, .id = reduced.id, .side = reduced.side,
+    send(OrderReduced{.seq = core::SeqNum{next_seq_++}, .id = reduced.id, .side = reduced.side,
                       .price = reduced.price, .qty = reduced.qty, .by = by, .last = true});
     return ReduceResult::Reduced;
 }
@@ -197,13 +198,13 @@ ReplaceResult OrderBook::replace_order(
 
     // Remove before insert: when new_id == old_id, the old index entry must be gone first.
     const Order removed = remove_resting(order_it);
-    send(OrderRemoved{.seq = next_seq_++, .id = removed.id, .side = removed.side,
+    send(OrderRemoved{.seq = core::SeqNum{next_seq_++}, .id = removed.id, .side = removed.side,
                       .price = removed.price, .qty = removed.qty,
                       .reason = RemoveReason::Replaced, .last = false});
 
     insert_resting(Order{new_id, removed.side, new_price, new_qty, time});
-    send(OrderAdded{.seq = next_seq_++, .id = new_id, .side = removed.side, .price = new_price,
-                    .qty = new_qty, .last = true});
+    send(OrderAdded{.seq = core::SeqNum{next_seq_++}, .id = new_id, .side = removed.side,
+                    .price = new_price, .qty = new_qty, .last = true});
 
     return ReplaceResult::Replaced;
 }

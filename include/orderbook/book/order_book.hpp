@@ -83,9 +83,9 @@ private:
     Result reject(Operation operation, core::OrderId id, Result reason);
 
     OrderBookListener* listener_;  // never null: the shared NullListener when none is given
-    std::uint64_t next_seq_{1};    // sequence number of the next event; the first event is 1
+    std::int64_t next_seq_{1};     // sequence number of the next event; the first event is 1
     bool in_callback_{false};      // true while a listener function runs and catches calls back in
-                                   //(not a thread-safety mechanism)
+                                   // (not a thread-safety mechanism)
 
     std::map<core::Price, Level, std::greater<>> bids_;
     std::map<core::Price, Level> asks_;
