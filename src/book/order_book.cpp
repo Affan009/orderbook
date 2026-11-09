@@ -1,10 +1,71 @@
 #include <cassert>
 #include <optional>
 #include <ostream>
+#include <type_traits>
 
 #include "orderbook/book/order_book.hpp"
 
 namespace orderbook::book {
+
+namespace {
+// Shared by every book built without a listener; it has no state, so sharing is safe.
+NullListener null_listener;
+} // namespace
+
+OrderBook::OrderBook() : listener_{&null_listener} {}
+OrderBook::OrderBook(OrderBookListener& listener) : listener_{&listener} {}
+
+template <typename Event>
+void OrderBook::send(const Event& event) {
+    in_callback_ = true;
+    if constexpr (std::is_same_v<Event, OrderAdded>) {
+        listener_->on_added(event);
+    } else if constexpr (std::is_same_v<Event, OrderRemoved>) {
+        listener_->on_removed(event);
+    } else if constexpr (std::is_same_v<Event, OrderReduced>) {
+        listener_->on_reduced(event);
+    } else {
+        static_assert(std::is_same_v<Event, OrderRejected>, "send: unknown event type");
+        listener_->on_rejected(event);
+    }
+    in_callback_ = false;
+}
+
+template <typename Result>
+Result OrderBook::reject(Operation operation, core::OrderId id, Result reason) {
+    send(OrderRejected{.seq = next_seq_++, .operation = operation, .id = id,
+                       .reason = reason, .last = true});
+    return reason;
+}
+
+void OrderBook::insert_resting(const Order& order) {
+    auto& price_level = (order.side == core::Side::Buy) ? bids_[order.price] : asks_[order.price];
+    auto it = price_level.add(order);
+    orders_by_id_.emplace(order.id, it);
+}
+
+Order OrderBook::remove_resting(Level::iterator order_it) {
+    const Order removed = *order_it;  // copy first: order_it is invalid once the order is erased
+
+    auto& price_level = (removed.side == core::Side::Buy) ? bids_[removed.price]
+                                                          : asks_[removed.price];
+    price_level.remove(order_it);
+
+    if (price_level.empty()) {
+        if (removed.side == core::Side::Buy) bids_.erase(removed.price);
+        else asks_.erase(removed.price);
+    }
+
+    orders_by_id_.erase(removed.id);
+    return removed;
+}
+
+Order OrderBook::reduce_resting(Level::iterator order_it, core::Qty by) {
+    auto& price_level = (order_it->side == core::Side::Buy) ? bids_[order_it->price]
+                                                            : asks_[order_it->price];
+    price_level.reduce(order_it, by);
+    return *order_it;
+}
 
 AddResult OrderBook::add_order(
     core::OrderId id,
@@ -13,36 +74,32 @@ AddResult OrderBook::add_order(
     core::Qty qty,
     core::Timestamp arrival_time
 ) {
-    if (qty == core::Qty{0}) return AddResult::ZeroQuantity;
-    if (orders_by_id_.contains(id)) return AddResult::DuplicateOrderId;
+    assert(!in_callback_ && "Listener must not call back into the order book");
 
-    auto& price_level = (side == core::Side::Buy) ? bids_[price] : asks_[price];
-    auto it = price_level.add(Order{id, side, price, qty, arrival_time});
+    if (qty == core::Qty{0}) return reject(Operation::Add, id, AddResult::ZeroQuantity);
+    if (orders_by_id_.contains(id)) {
+        return reject(Operation::Add, id, AddResult::DuplicateOrderId);
+    }
 
-    orders_by_id_.emplace(id, it);
+    insert_resting(Order{id, side, price, qty, arrival_time});
+    send(OrderAdded{.seq = next_seq_++, .id = id, .side = side, .price = price,
+                    .qty = qty, .last = true});
 
     return AddResult::Accepted;
 }
 
 CancelResult OrderBook::cancel_order(core::OrderId id) {
+    assert(!in_callback_ && "Listener must not call back into the order book");
+
     const auto map_it = orders_by_id_.find(id);
-    if (map_it == orders_by_id_.end()) return CancelResult::UnknownOrderId;
-
-    const auto order_it = map_it->second;
-
-    const core::Side side = order_it->side;
-    const core::Price price = order_it->price;
-
-    auto& price_level = (side == core::Side::Buy) ? bids_[price] : asks_[price];
-    price_level.remove(order_it);
-
-    if (price_level.empty()) {
-        if (side == core::Side::Buy) bids_.erase(price);
-        else asks_.erase(price);
+    if (map_it == orders_by_id_.end()) {
+        return reject(Operation::Cancel, id, CancelResult::UnknownOrderId);
     }
 
-    orders_by_id_.erase(map_it);
-
+    const Order removed = remove_resting(map_it->second);
+    send(OrderRemoved{.seq = next_seq_++, .id = removed.id, .side = removed.side,
+                      .price = removed.price, .qty = removed.qty,
+                      .reason = RemoveReason::Cancelled, .last = true});
     return CancelResult::Cancelled;
 }
 
@@ -52,9 +109,13 @@ ModifyResult OrderBook::modify_order(
     core::Qty new_qty,
     core::Timestamp time
 ) {
+    assert(!in_callback_ && "Listener must not call back into the order book");
+
     const auto map_it = orders_by_id_.find(id);
-    if (map_it == orders_by_id_.end()) return ModifyResult::UnknownOrderId;
-    if (new_qty == core::Qty{0}) return ModifyResult::ZeroQuantity;
+    if (map_it == orders_by_id_.end()) {
+        return reject(Operation::Modify, id, ModifyResult::UnknownOrderId);
+    }
+    if (new_qty == core::Qty{0}) return reject(Operation::Modify, id, ModifyResult::ZeroQuantity);
 
     const auto order_it = map_it->second;
 
@@ -63,40 +124,52 @@ ModifyResult OrderBook::modify_order(
     const core::Qty qty = order_it->qty;
 
     if (new_price == price && new_qty <= qty) {
+        // Same price and not larger: the order keeps its place in the queue.
         if (new_qty < qty) {
-            [[maybe_unused]] const auto reduce_result = reduce_order(id, qty - new_qty);
-            assert(reduce_result == ReduceResult::Reduced);
+            const core::Qty by = qty - new_qty;
+            const Order reduced = reduce_resting(order_it, by);
+            send(OrderReduced{.seq = next_seq_++, .id = reduced.id, .side = reduced.side,
+                              .price = reduced.price, .qty = reduced.qty, .by = by, .last = true});
         }
+        // (new_qty == qty changes nothing, so nothing is sent.)
     } else {
-        [[maybe_unused]] const auto cancel_result = cancel_order(id);
-        assert(cancel_result == CancelResult::Cancelled);
+        // Larger, or a new price: it loses its place, so it leaves and re-enters at the back.
+        const Order removed = remove_resting(order_it);
+        send(OrderRemoved{.seq = next_seq_++, .id = removed.id, .side = removed.side,
+                          .price = removed.price, .qty = removed.qty,
+                          .reason = RemoveReason::Modified, .last = false});
 
-        [[maybe_unused]] const auto add_result = add_order(id, side, new_price, new_qty, time);
-        assert(add_result == AddResult::Accepted);
+        insert_resting(Order{id, side, new_price, new_qty, time});
+        send(OrderAdded{.seq = next_seq_++, .id = id, .side = side,
+                        .price = new_price, .qty = new_qty, .last = true});
     }
 
     return ModifyResult::Modified;
 }
 
 ReduceResult OrderBook::reduce_order(core::OrderId id, core::Qty by) {
+    assert(!in_callback_ && "Listener must not call back into the order book");
+
     const auto map_it = orders_by_id_.find(id);
-    if (map_it == orders_by_id_.end()) return ReduceResult::UnknownOrderId;
-    if (by == core::Qty{0}) return ReduceResult::ZeroQuantity;
+    if (map_it == orders_by_id_.end()) {
+        return reject(Operation::Reduce, id, ReduceResult::UnknownOrderId);
+    }
+    if (by == core::Qty{0}) return reject(Operation::Reduce, id, ReduceResult::ZeroQuantity);
 
     const auto order_it = map_it->second;
 
+    // Taking at least what remains removes the order (the feed's "partial cancel" can take it all).
     if (by >= order_it->qty) {
-        [[maybe_unused]] const auto result = cancel_order(id);
-        assert(result == CancelResult::Cancelled);
+        const Order removed = remove_resting(order_it);
+        send(OrderRemoved{.seq = next_seq_++, .id = removed.id, .side = removed.side,
+                          .price = removed.price, .qty = removed.qty,
+                          .reason = RemoveReason::Reduced, .last = true});
         return ReduceResult::Removed;
     }
 
-    const core::Side side = order_it->side;
-    const core::Price price = order_it->price;
-
-    auto& price_level = (side == core::Side::Buy) ? bids_[price] : asks_[price];
-    price_level.reduce(order_it, by);
-
+    const Order reduced = reduce_resting(order_it, by);
+    send(OrderReduced{.seq = next_seq_++, .id = reduced.id, .side = reduced.side,
+                      .price = reduced.price, .qty = reduced.qty, .by = by, .last = true});
     return ReduceResult::Reduced;
 }
 
@@ -107,20 +180,30 @@ ReplaceResult OrderBook::replace_order(
     core::Qty new_qty,
     core::Timestamp time
 ) {
+    assert(!in_callback_ && "Listener must not call back into the order book");
+
     const auto map_it = orders_by_id_.find(old_id);
-    if (map_it == orders_by_id_.end()) return ReplaceResult::UnknownOrderId;
-    if (new_qty == core::Qty{0}) return ReplaceResult::ZeroQuantity;
-    if (new_id != old_id && orders_by_id_.contains(new_id)) return ReplaceResult::DuplicateOrderId;
+    if (map_it == orders_by_id_.end()) {
+        return reject(Operation::Replace, old_id, ReplaceResult::UnknownOrderId);
+    }
+    if (new_qty == core::Qty{0}) {
+        return reject(Operation::Replace, old_id, ReplaceResult::ZeroQuantity);
+    }
+    if (new_id != old_id && orders_by_id_.contains(new_id)) {
+        return reject(Operation::Replace, old_id, ReplaceResult::DuplicateOrderId);
+    }
 
     const auto order_it = map_it->second;
 
-    const core::Side side = order_it->side;
+    // Remove before insert: when new_id == old_id, the old index entry must be gone first.
+    const Order removed = remove_resting(order_it);
+    send(OrderRemoved{.seq = next_seq_++, .id = removed.id, .side = removed.side,
+                      .price = removed.price, .qty = removed.qty,
+                      .reason = RemoveReason::Replaced, .last = false});
 
-    [[maybe_unused]] const auto cancel_result = cancel_order(old_id);
-    assert(cancel_result == CancelResult::Cancelled);
-
-    [[maybe_unused]] const auto add_result = add_order(new_id, side, new_price, new_qty, time);
-    assert(add_result == AddResult::Accepted);
+    insert_resting(Order{new_id, removed.side, new_price, new_qty, time});
+    send(OrderAdded{.seq = next_seq_++, .id = new_id, .side = removed.side, .price = new_price,
+                    .qty = new_qty, .last = true});
 
     return ReplaceResult::Replaced;
 }
@@ -203,7 +286,7 @@ std::optional<InvariantViolation> OrderBook::check_invariants() const {
             const auto map_it = orders_by_id_.find(it->id);
             if (map_it == orders_by_id_.end() ||
                 &(*map_it->second) != &(*it)) return InvariantViolation::IndexMismatch;
-            
+
             agg_qty += it->qty;
             order_count++;
         }
@@ -222,7 +305,7 @@ std::optional<InvariantViolation> OrderBook::check_invariants() const {
             const auto map_it = orders_by_id_.find(it->id);
             if (map_it == orders_by_id_.end() ||
                 &(*map_it->second) != &(*it)) return InvariantViolation::IndexMismatch;
-            
+
             agg_qty += it->qty;
             order_count++;
         }

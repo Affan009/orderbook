@@ -19,19 +19,24 @@ static_assert(!Addable<OrderId>, "OrderId + OrderId must not compile");
 static_assert(Addable<Qty>, "Qty + Qty must compile");
 static_assert(Subtractable<Qty>, "Qty - Qty must compile");
 
-static_assert(!std::is_convertible_v<std::int64_t, Price>, "an int64_t must not silently become a Price");
-static_assert(!std::is_convertible_v<Price, std::int64_t>, "a Price must not silently become an int64_t");
+static_assert(!std::is_convertible_v<std::int64_t, Price>,
+              "an int64_t must not silently become a Price");
+static_assert(!std::is_convertible_v<Price, std::int64_t>,
+              "a Price must not silently become an int64_t");
 
 static_assert(!std::is_convertible_v<Qty, Price>, "a Qty must not silently become a Price");
 static_assert(!std::is_convertible_v<Price, Qty>, "a Price must not silently become a Qty");
 
-static_assert(!std::is_convertible_v<OrderId, Price>, "an OrderId must not silently become a Price");
-static_assert(!std::is_convertible_v<Price, OrderId>, "a Price must not silently become an OrderId");
+static_assert(!std::is_convertible_v<OrderId, Price>,
+              "an OrderId must not silently become a Price");
+static_assert(!std::is_convertible_v<Price, OrderId>,
+              "a Price must not silently become an OrderId");
 
 static_assert(!std::is_convertible_v<int, Side>, "an int must not silently become a Side");
 static_assert(!std::is_convertible_v<Side, int>, "a Side must not silently become an int");
 
-static_assert(std::is_same_v<Timestamp::duration, std::chrono::nanoseconds>, "Duration must be in units of nanoseconds");
+static_assert(std::is_same_v<Timestamp::duration, std::chrono::nanoseconds>,
+              "Duration must be in units of nanoseconds");
 
 TEST(Price, StoresTicksExactly) {
     const Price price{12345};

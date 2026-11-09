@@ -43,6 +43,7 @@ add_executable(orderbook_book_tests
     tests/book/order_book_test.cpp
     tests/book/level_test.cpp
     tests/book/invariant_test.cpp
+    tests/book/events_test.cpp
 )
 target_link_libraries(orderbook_book_tests PRIVATE orderbook::book GTest::gtest_main)
 target_compile_options(orderbook_book_tests PRIVATE -Wall -Wextra -Wpedantic)

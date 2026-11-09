@@ -66,7 +66,8 @@ TEST(OrderBook, RejectsDuplicateOrderId) {
         book.add_order(OrderId{1}, Side::Buy, Price{12345}, Qty{100}, Timestamp{1ns}),
         AddResult::Accepted
     );
-    const AddResult result = book.add_order(OrderId{1}, Side::Buy, Price{12346}, Qty{102}, Timestamp{2ns});
+    const AddResult result =
+        book.add_order(OrderId{1}, Side::Buy, Price{12346}, Qty{102}, Timestamp{2ns});
     EXPECT_EQ(result, AddResult::DuplicateOrderId);
 
     // The best bid must be unchanged.
@@ -75,7 +76,8 @@ TEST(OrderBook, RejectsDuplicateOrderId) {
 
 TEST(OrderBook, RejectsZeroQuantity) {
     OrderBook book;
-    const AddResult result = book.add_order(OrderId{1}, Side::Buy, Price{12345}, Qty{0}, Timestamp{1ns});
+    const AddResult result =
+        book.add_order(OrderId{1}, Side::Buy, Price{12345}, Qty{0}, Timestamp{1ns});
     EXPECT_EQ(result, AddResult::ZeroQuantity);
 
     // The best bid must not have a value.

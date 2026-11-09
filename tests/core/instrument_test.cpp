@@ -13,9 +13,11 @@ TEST(Instrument, StoresItsFields) {
 }
 
 TEST(Instrument, ThrowsOnZeroTickSize) {
-    EXPECT_THROW(Instrument("AAPL", TickSize{0}, LotSize{fixed_point_scale}), std::invalid_argument);
+    EXPECT_THROW(Instrument("AAPL", TickSize{0}, LotSize{fixed_point_scale}),
+                 std::invalid_argument);
 }
 
 TEST(Instrument, ThrowsOnNegativeLotSize) {
-    EXPECT_THROW(Instrument("AAPL", TickSize{fixed_point_scale / 100}, LotSize{-fixed_point_scale}), std::invalid_argument);
+    EXPECT_THROW(Instrument("AAPL", TickSize{fixed_point_scale / 100}, LotSize{-fixed_point_scale}),
+                 std::invalid_argument);
 }
