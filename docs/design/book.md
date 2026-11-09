@@ -63,37 +63,36 @@
 * `replace_order` handles ITCH's Order Replace message: the old id is retired and the new one joins the back of the queue with the given details. The message does not carry the side of the order, so it is copied from the old order.
 * Cancelling an unknown id is a normal event, not an error: an order can be filled just before the cancel arrives. It returns `UnknownOrderId` instead of throwing.
 * Every operation checks everything before it changes anything, so a rejected request leaves the book exactly as it was.
-* `modify_order` and `replace_order` are built from `cancel_order`, `add_order` and `reduce_order`, so each rule lives in its own place as a function. The cost is a few repeated lookups, which we will measure later on.
+* Every operation changes the book only through three private helpers: `insert_resting`, `remove_resting` and `reduce_resting`. They change storage and never send events.
+* No public operation calls another one, because public operations send events which are specific to them. Calling another operation inside one would emit the wrong event: a modify built from `cancel_order` would report its removal with reason `Cancelled` instead of `Modified`.
 
 ## Queries and results
 
 * `best_bid()` and `best_ask()` return `std::optional<Price>` because for empty sides, we can return `std::nullopt` instead of a sentinel value. The reason for not using a sentinel (like 0 or -1) is because they may be valid prices. With `optional`, the "no price" case is visible in the return type.
 * `add_order` returns an `AddResult` enum: `Accepted`, `ZeroQuantity` or `DuplicateOrderId`. It is `[[nodiscard]]`, so the compiler warns when the return value is not checked.
-* Note: **Why an `AddResult` enum and not a `bool` or an exception?** This is because it doesn't tell us the exact reason why an order was rejected. An exception also doesn't fit as they are meant for unexpected failures and are slow when thrown, while rejections are a routine part of a book's work.
+* Note: **Why an `AddResult` enum and not a `bool` or an exception?** A bool can say true or false, but not why the order was rejected. An exception also doesn't fit as they are meant for unexpected failures and are slow when thrown, while rejections are a routine part of a book's work.
 * A rejected order leaves the book unchanged, because both checks run before anything is modified.
 * A negative quantity isn't a rejection, because `Qty` must always be non-negative, so it is a programming error rather than a routine input. The `assert` in `Qty` catches it in debug builds, but is removed in the release builds, so inputs from outside the program must be validated before it becomes a `Qty`.
 * `find_order(id)` returns a copy of the order, wrapped in `std::optional`, so a caller can look at it but cannot change the book through it.
 * `queue_ahead(id)` returns `std::optional<Qty>`: `Qty{0}` means that there are no orders ahead of it, i.e., it is the first in the queue. Nothing means the order is not present in the book. If both returned 0, a cancelled order would look like it is the first in the queue, which would mislead the backtester.
 * `depth_at` returns `Qty{0}` for an empty price instead, because for a price, "no orders" and "zero depth" are equivalent.
-* Every operation that changes the book returns its own result enum (`CancelResult`, `ModifyResult`, `ReduceResult`, `ReplaceResult`), all `[[nodiscard]]`. New rejection reasons will be added as new values in these enums, so the functions' signatures never change. What happened to the book, such as fills, will be reported separately by an event listener (planned).
+* Every operation that changes the book returns its own result enum (`CancelResult`, `ModifyResult`, `ReduceResult`, `ReplaceResult`), all `[[nodiscard]]`. New rejection reasons will be added as new values in these enums, so the functions' signatures never change. What happened to the book is reported separately, as events sent to a listener (see `events.md`).
+
+## Checking the book's rules
+
+* `check_invariants()` walks the entire orderbook and returns the first broken rule as an `InvariantViolation`, or `std::nullopt` if all of them hold. It is public and `const` because tests would directly call it.
+* It checks, in this order: no empty level exists; every order's quantity is positive; every order sits on the correct side and at its level's price queue; the index entry for each order points at the iterator of the order in the list; each level's stored depth equals the aggregate quantity of orders on that level; and the number of orders walked equals to the total orders mapped under `orders_by_id_`, i.e., `orders_by_id_.size()`.
+* When one corruption breaks two rules, the order decides which is reported: an order's own checks (quantity, side, price, index entry) come before the level's depth check, and the walk comes before the total. So a wrong quantity is reported as the order's fault, the cause, rather than as the level's wrong depth, its effect.
+* It walks the whole book in `O(n)`, so it runs in tests and verification runs, not on every operation in production, because one operation costs `O(1)` or `O(log n)` and the check would cost far more than the work it checks.
+* Tests break the book on purpose through `OrderBookTestAccess`, a struct the book names as a `friend`. Only test files define it, so production code cannot reach the private storage.
+* It does not yet check that the book is uncrossed (best bid below best ask). A book built from a feed can be briefly crossed in the middle of one event (one exchange action the feed reports as several messages), and is only guaranteed consistent at the end of each event (Databento's `F_LAST` flag). The check will be added later, where it will run at those points.
 
 ## References
 
-- Gould, M. D., Porter, M. A., Williams, S., McDonald, M., Fenn, D. J., & Howison, S. D. (2013).
-  *Limit order books*. Quantitative Finance, 13(11). https://arxiv.org/abs/1012.0349
-  — definitions of orders, levels, depth and priority, sections II.A–B and III.D–G.
+- Gould, M. D., Porter, M. A., Williams, S., McDonald, M., Fenn, D. J., & Howison, S. D. (2013). *Limit order books*. Quantitative Finance. https://arxiv.org/abs/1012.0349
 - Donadio, S., Ghosh, S., & Rossier, R. (2022). *Developing High-Frequency Trading Systems*. Packt.
-  — order book requirements and storage, chapter 2, printed pp. 30–34 (PDF pp. 47–51).
-- CME Group. *Order Functionalities*.
-  https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457414497/Order+Functionalities
-  —  which order changes lose queue position ("Order Modification"), used for modify_order.
-- Jane Street Tech Blog (2010). *Making something out of nothing (or, why None is better than NaN and NULL)*.
-  https://blog.janestreet.com/making-something-out-of-nothing-or-why-none-is-better-than-nan-and-null/
-  — why a "maybe a value" type beats a sentinel.
+- CME Group. *Order Functionalities*. https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457414497/Order+Functionalities
+- Jane Street Tech Blog (2010). *Making something out of nothing (or, why None is better than NaN and NULL)*. https://blog.janestreet.com/making-something-out-of-nothing-or-why-none-is-better-than-nan-and-null/
 - hftengineer. *Order book data structures*. https://hftengineer.com/posts/order-book-data-structures/
-  — the sorted map design used here and when it is appropriate.
-- Nasdaq. *TotalView-ITCH 5.0 Specification*. section 1.4 (Order Executed, Cancel, Delete and Replace messages).
-  — which fields each feed event carries; why replace copies the side from the original order.
-- Silahian, A. (2026). *Cancel-First Order Book Design: From ITCH 5.0 to L1D Hot Caches*. Electronic Trading Hub.
-  https://electronictradinghub.com/cancel-first-order-book-design-from-itch-5-0-to-l1d-hot-caches/
-  — why cancels dominate real order flow; which ITCH message each book operation handles.
+- Nasdaq. *TotalView-ITCH 5.0 Specification*. https://www.nasdaqtrader.com/content/technicalsupport/specifications/dataproducts/NQTVITCHSpecification.pdf
+- Silahian, A. (2026). *Cancel-First Order Book Design: From ITCH 5.0 to L1D Hot Caches*. Electronic Trading Hub. https://electronictradinghub.com/cancel-first-order-book-design-from-itch-5-0-to-l1d-hot-caches/

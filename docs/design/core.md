@@ -41,6 +41,7 @@ using Price = StrongType<struct PriceTag>;
 ## Side as a scoped enum
 
 * The order side is an `enum class` containing only `{ Buy, Sell }`.
+* It is stored in one byte (`std::uint8_t`), like the other enums. No struct is smaller yet, because padding keeps the next field on an 8-byte boundary; the saving appears once fields are reordered.
 * It provides safety by disallowing silent conversion to ints, and of ints to Side.
 
 ## Arrival time as a chrono timestamp
@@ -56,26 +57,15 @@ using Price = StrongType<struct PriceTag>;
 * An Instrument holds the symbol, tick size and lot size of an instrument/asset.
 * Tick and lot sizes are stored as whole numbers of billionths (`fixed_point_scale = 1'000'000'000`)
 *  Tick and lot sizes must be strictly positive. Instruments come with configuration, so a bad value throws (checked in each build).
-*  **NOTES**: 
+*  **NOTES**:
 1. The decision for storage of tick and lot sizes was modelled from CME's binary price format (`PRICENULL9`: an `int64_t` mantissa with a fixed `-9` exponent).
 2. `Qty` counts steps, not billionths, so with 1-share lot, 100 shares is `Qty{ 100 }` and with 0.001 BTC step, 0.005 is `Qty{ 5 }`.
 3. Instrument is not used by the book, the book only works on ticks and lots. It is used when loading and/or displaying data.
 
 ## References
 
-- Gould, M. D., Porter, M. A., Williams, S., McDonald, M., Fenn, D. J., & Howison, S. D. (2013).
-  *Limit order books*. Quantitative Finance, 13(11). https://arxiv.org/abs/1012.0349
-  — "resolution parameters" (tick size and lot size), section III.G.
-- Boccara, J. (2016). *Strong types for strong interfaces*. Fluent C++.
-  https://www.fluentcpp.com/2016/12/08/strong-types-for-strong-interfaces/
-  — the tagged wrapper pattern behind `StrongType`.
-- cppreference: `std::chrono::time_point` and `std::chrono::duration`.
-  https://en.cppreference.com/w/cpp/chrono/time_point ·
-  https://en.cppreference.com/w/cpp/chrono/duration
-  — moment and length-of-time types used for `Timestamp`.
-- CME Group. *MDP 3.0 – CME Globex Pricing*.
-  https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457225869/MDP+3.0+-+CME+Globex+Pricing
-  — tick size as the minimum price fluctuation (tag 969, MinPriceIncrement).
-- CME Group. *MDP 3.0 – SBE Decoding Example*.
-  https://cmegroupclientsite.atlassian.net/wiki/display/EPICSANDBOX/MDP+3.0+-+SBE+Decoding+Example
-  — PRICE9 / PRICENULL9: an int64 mantissa with a constant exponent of -9.
+- Gould, M. D., Porter, M. A., Williams, S., McDonald, M., Fenn, D. J., & Howison, S. D. (2013). *Limit order books*. Quantitative Finance. https://arxiv.org/abs/1012.0349
+- Boccara, J. (2016). *Strong types for strong interfaces*. Fluent C++. https://www.fluentcpp.com/2016/12/08/strong-types-for-strong-interfaces/
+- cppreference. *std::chrono::time_point* and *std::chrono::duration*. https://en.cppreference.com/w/cpp/chrono/time_point · https://en.cppreference.com/w/cpp/chrono/duration
+- CME Group. *MDP 3.0 – CME Globex Pricing*. https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457225869/MDP+3.0+-+CME+Globex+Pricing
+- CME Group. *MDP 3.0 – SBE Decoding Example*. https://cmegroupclientsite.atlassian.net/wiki/display/EPICSANDBOX/MDP+3.0+-+SBE+Decoding+Example
